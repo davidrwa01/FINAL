@@ -1,0 +1,51 @@
+<svg viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="800" height="600" fill="#000000"/>
+  
+  <!-- Bull Head -->
+  <g id="bull">
+    <!-- Horns -->
+    <path d="M 350 150 Q 320 100 300 80" stroke="#FFD700" stroke-width="25" fill="none" stroke-linecap="round"/>
+    <path d="M 450 150 Q 480 100 500 80" stroke="#FFD700" stroke-width="25" fill="none" stroke-linecap="round"/>
+    
+    <!-- Head -->
+    <circle cx="400" cy="220" r="80" fill="#FFD700"/>
+    
+    <!-- Eyes -->
+    <circle cx="375" cy="200" r="12" fill="#000000"/>
+    <circle cx="425" cy="200" r="12" fill="#000000"/>
+    <circle cx="378" cy="198" r="5" fill="#FFD700"/>
+    <circle cx="428" cy="198" r="5" fill="#FFD700"/>
+    
+    <!-- Nose -->
+    <ellipse cx="400" cy="235" rx="15" ry="20" fill="#000000"/>
+  </g>
+  
+  <!-- Candlesticks -->
+  <g id="candles">
+    <!-- Candle 1 -->
+    <rect x="320" y="300" width="20" height="40" fill="#FFD700"/>
+    <rect x="315" y="290" width="30" height="15" fill="#FFD700"/>
+    
+    <!-- Candle 2 -->
+    <rect x="360" y="280" width="20" height="60" fill="#FFD700"/>
+    <rect x="355" y="270" width="30" height="15" fill="#FFD700"/>
+    
+    <!-- Candle 3 -->
+    <rect x="400" y="260" width="20" height="80" fill="#FFD700"/>
+    <rect x="395" y="250" width="30" height="15" fill="#FFD700"/>
+    
+    <!-- Candle 4 -->
+    <rect x="440" y="290" width="20" height="50" fill="#FFD700"/>
+    <rect x="435" y="280" width="30" height="15" fill="#FFD700"/>
+  </g>
+  
+  <!-- Curve under candlesticks -->
+  <path d="M 300 360 Q 400 420 500 360" stroke="#FFD700" stroke-width="8" fill="none" stroke-linecap="round"/>
+  <path d="M 300 360 Q 400 420 500 360" stroke="#555555" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.6" stroke-dasharray="5,5"/>
+  
+  <!-- Text: SMART-KORA.FX -->
+  <text x="400" y="520" font-size="72" font-weight="bold" fill="#FFD700" text-anchor="middle" font-family="Arial, sans-serif">
+    SMART-KORA.FX
+  </text>
+</svg>

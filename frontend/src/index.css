@@ -1,0 +1,117 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-black text-white;
+  }
+}
+
+@layer utilities {
+  .glow-yellow {
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.3), 0 0 40px rgba(255, 215, 0, 0.1);
+  }
+
+  .glow-green {
+    box-shadow: 0 0 20px rgba(0, 210, 106, 0.3);
+  }
+
+  .glow-red {
+    box-shadow: 0 0 20px rgba(255, 71, 87, 0.3);
+  }
+
+  .upload-zone {
+    border: 2px dashed #FFD700;
+    background: rgba(255, 215, 0, 0.05);
+    transition: all 0.3s ease;
+  }
+
+  .upload-zone:hover {
+    background: rgba(255, 215, 0, 0.1);
+    border-color: #FFE44D;
+  }
+
+  .signal-card {
+    background: linear-gradient(135deg, #252525 0%, #1A1A1A 100%);
+    border-left: 4px solid #FFD700;
+  }
+
+  .signal-card.buy {
+    border-left-color: #00D26A;
+  }
+
+  .signal-card.sell {
+    border-left-color: #FF4757;
+  }
+
+  .signal-card.wait {
+    border-left-color: #888888;
+  }
+
+  .loading-bar {
+    width: 100%;
+    height: 4px;
+    background: #252525;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .loading-progress {
+    height: 100%;
+    background: linear-gradient(90deg, #FFD700, #FFE44D);
+    animation: loading 1.5s ease-in-out infinite;
+  }
+
+  @keyframes loading {
+    0% { width: 0%; margin-left: 0; }
+    50% { width: 70%; margin-left: 15%; }
+    100% { width: 0%; margin-left: 100%; }
+  }
+
+  .spinner {
+    border: 3px solid #252525;
+    border-top: 3px solid #FFD700;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  .slide-in {
+    animation: slideIn 0.3s ease-out;
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .pulse {
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+}
+
+/* Scrollbar styles */
+.scrollbar-custom::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollbar-custom::-webkit-scrollbar-track {
+  background: #1A1A1A;
+}
+
+.scrollbar-custom::-webkit-scrollbar-thumb {
+  background: #FFD700;
+  border-radius: 3px;
+}

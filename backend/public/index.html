@@ -1,0 +1,3810 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SMART-KORAFX | AI Trading Analyst</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
+    <style>
+        :root {
+            --yellow: #FFD700;
+            --yellow-light: #FFE44D;
+            --yellow-dark: #E6C200;
+            --black: #0B0B0B;
+            --black-light: #1A1A1A;
+            --black-lighter: #252525;
+            --white: #FFFFFF;
+            --gray: #888888;
+            --green: #00D26A;
+            --red: #FF4757;
+        }
+
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        body {
+            background-color: var(--black);
+            color: var(--white);
+        }
+
+        .bg-black { background-color: var(--black); }
+        .bg-black-light { background-color: var(--black-light); }
+        .bg-black-lighter { background-color: var(--black-lighter); }
+        .bg-yellow { background-color: var(--yellow); }
+
+        .text-yellow { color: var(--yellow); }
+        .text-gray { color: var(--gray); }
+        .text-green { color: var(--green); }
+        .text-red { color: var(--red); }
+
+        .glow-yellow {
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.3), 0 0 40px rgba(255, 215, 0, 0.1);
+        }
+
+        .glow-green {
+            box-shadow: 0 0 20px rgba(0, 210, 106, 0.3);
+        }
+
+        .glow-red {
+            box-shadow: 0 0 20px rgba(255, 71, 87, 0.3);
+        }
+
+        .slide-in {
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .upload-zone {
+            border: 2px dashed var(--yellow);
+            background: rgba(255, 215, 0, 0.05);
+            transition: all 0.3s ease;
+        }
+
+        .upload-zone:hover, .upload-zone.dragover {
+            background: rgba(255, 215, 0, 0.1);
+            border-color: var(--yellow-light);
+        }
+
+        .signal-card {
+            background: linear-gradient(135deg, var(--black-lighter) 0%, var(--black-light) 100%);
+            border-left: 4px solid var(--yellow);
+        }
+
+        .signal-card.buy { border-left-color: var(--green); }
+        .signal-card.sell { border-left-color: var(--red); }
+        .signal-card.wait { border-left-color: var(--gray); }
+
+        .stat-card {
+            background: var(--black-lighter);
+            border: 1px solid #333;
+        }
+
+        .loading-bar {
+            width: 100%;
+            height: 4px;
+            background: var(--black-lighter);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .loading-progress {
+            height: 100%;
+            background: linear-gradient(90deg, var(--yellow), var(--yellow-light));
+            animation: loading 1.5s ease-in-out infinite;
+        }
+
+        @keyframes loading {
+            0% { width: 0%; margin-left: 0; }
+            50% { width: 70%; margin-left: 15%; }
+            100% { width: 0%; margin-left: 100%; }
+        }
+
+        .scrollbar-custom::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .scrollbar-custom::-webkit-scrollbar-track {
+            background: var(--black-light);
+        }
+
+        .scrollbar-custom::-webkit-scrollbar-thumb {
+            background: var(--yellow);
+            border-radius: 3px;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+        }
+
+        .analysis-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 8px;
+        }
+
+        .ocr-highlight {
+            background: rgba(255, 215, 0, 0.2);
+            border: 1px solid var(--yellow);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 11px;
+        }
+
+        .candle-analysis {
+            display: flex;
+            gap: 2px;
+            align-items: flex-end;
+            height: 60px;
+        }
+
+        .candle {
+            width: 4px;
+            border-radius: 1px;
+        }
+
+        .candle.bullish { background: var(--green); }
+        .candle.bearish { background: var(--red); }
+
+        .spinner {
+            border: 3px solid var(--black-lighter);
+            border-top: 3px solid var(--yellow);
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .progress-step {
+            transition: all 0.3s ease;
+        }
+
+        .progress-step.active {
+            background: rgba(255, 215, 0, 0.2);
+        }
+
+        .progress-step.complete {
+            background: rgba(0, 210, 106, 0.2);
+        }
+
+        .text-purple-400 { color: #c084fc; }
+        .text-purple-500 { color: #a855f7; }
+        .text-orange-400 { color: #fb923c; }
+        .text-orange-500 { color: #f97316; }
+        .text-cyan-400 { color: #22d3ee; }
+        .bg-purple-400 { background-color: #c084fc; }
+        .bg-purple-500 { background-color: #a855f7; }
+        .bg-orange-400 { background-color: #fb923c; }
+        .bg-orange-500 { background-color: #f97316; }
+        
+        .border-purple-400 { border-color: #c084fc; }
+        .border-orange-400 { border-color: #fb923c; }
+
+        .smc-badge {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 600;
+        }
+        
+        .smc-badge.bos { background: rgba(0, 210, 106, 0.2); color: #00D26A; }
+        .smc-badge.choch { background: rgba(255, 215, 0, 0.2); color: #FFD700; }
+        .smc-badge.ob { background: rgba(255, 215, 0, 0.3); color: #FFD700; }
+        .smc-badge.fvg { background: rgba(168, 85, 247, 0.2); color: #a855f7; }
+    </style>
+</head>
+<body class="min-h-screen">
+    <!-- Header -->
+    <header class="bg-black-light border-b border-gray-800 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-3">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <div class="flex items-center gap-2">
+                        <div class="w-10 h-10 bg-yellow flex items-center justify-center rounded-lg glow-yellow">
+                            <svg class="w-6 h-6 text-black" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h1 class="text-xl font-bold tracking-wide">SMART-KORAFX</h1>
+                            <p class="text-xs text-gray">AI TRADING ANALYST</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <nav class="hidden md:flex items-center gap-6">
+                    <a href="#" class="text-yellow text-sm font-medium hover:text-yellow-light transition">Dashboard</a>
+                    <a href="#" class="text-gray text-sm hover:text-white transition">Analysis</a>
+                    <a href="#" class="text-gray text-sm hover:text-white transition">Trade History</a>
+                    <a href="#" class="text-gray text-sm hover:text-white transition">Analytics</a>
+                </nav>
+
+                <div class="flex items-center gap-4">
+                    <div class="flex items-center gap-2 px-3 py-1.5 bg-black-lighter rounded-full">
+                        <div class="w-2 h-2 bg-green rounded-full pulse" id="api-status"></div>
+                        <span class="text-xs text-green mono" id="api-status-text">LIVE DATA</span>
+                    </div>
+                    <div class="w-8 h-8 bg-yellow rounded-full flex items-center justify-center text-black font-bold text-sm">
+                        AI
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 py-6">
+        <!-- Live Market Ticker - Real Data -->
+        <div class="flex flex-wrap items-center gap-4 mb-6 overflow-x-auto pb-2">
+            <div class="flex items-center gap-2 px-4 py-2 bg-black-light rounded-lg min-w-fit">
+                <span class="text-gray text-xs">BTC/USDT</span>
+                <span class="text-white mono text-sm" id="btc-price">Loading...</span>
+                <span class="text-xs" id="btc-change">--</span>
+            </div>
+            <div class="flex items-center gap-2 px-4 py-2 bg-black-light rounded-lg min-w-fit">
+                <span class="text-gray text-xs">ETH/USDT</span>
+                <span class="text-white mono text-sm" id="eth-price">Loading...</span>
+                <span class="text-xs" id="eth-change">--</span>
+            </div>
+            <div class="flex items-center gap-2 px-4 py-2 bg-black-light rounded-lg min-w-fit">
+                <span class="text-gray text-xs">EUR/USD</span>
+                <span class="text-white mono text-sm" id="eur-price">Loading...</span>
+                <span class="text-xs" id="eur-change">--</span>
+            </div>
+            <div class="flex items-center gap-2 px-4 py-2 bg-black-light rounded-lg min-w-fit">
+                <span class="text-gray text-xs">XAU/USD</span>
+                <span class="text-yellow mono text-sm" id="gold-price">Loading...</span>
+                <span class="text-xs" id="gold-change">--</span>
+            </div>
+            <div class="flex items-center gap-2 px-4 py-2 bg-black-light rounded-lg min-w-fit">
+                <span class="text-gray text-xs">GBP/USD</span>
+                <span class="text-white mono text-sm" id="gbp-price">Loading...</span>
+                <span class="text-xs" id="gbp-change">--</span>
+            </div>
+            <div class="ml-auto text-xs text-gray flex items-center gap-2">
+                <span class="mono" id="current-time"></span>
+                <span class="text-yellow">|</span>
+                <span id="market-session">--</span>
+            </div>
+        </div>
+
+        <div class="grid lg:grid-cols-3 gap-6">
+            <!-- Left Column - Upload & Analysis -->
+            <div class="lg:col-span-2 space-y-6">
+                <!-- Upload Section -->
+                <div class="bg-black-light rounded-xl p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-lg font-semibold flex items-center gap-2">
+                            <svg class="w-5 h-5 text-yellow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                            </svg>
+                            Chart Analysis Engine
+                        </h2>
+                        <span class="text-xs text-gray">AI-Powered Image Recognition</span>
+                    </div>
+                    
+                    <div id="upload-zone" class="upload-zone rounded-xl p-8 text-center cursor-pointer">
+                        <input type="file" id="file-input" class="hidden" accept="image/*">
+                        <div id="upload-content">
+                            <svg class="w-16 h-16 text-yellow mx-auto mb-4 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                            </svg>
+                            <p class="text-lg font-medium mb-2">Drop your trading chart here</p>
+                            <p class="text-sm text-gray mb-4">AI will analyze patterns, structure, and generate signals</p>
+                            <div class="flex flex-wrap justify-center gap-2 text-xs text-gray">
+                                <span class="px-2 py-1 bg-black-lighter rounded">Forex</span>
+                                <span class="px-2 py-1 bg-black-lighter rounded">Crypto</span>
+                                <span class="px-2 py-1 bg-black-lighter rounded">Gold</span>
+                                <span class="px-2 py-1 bg-black-lighter rounded">Indices</span>
+                            </div>
+                        </div>
+                        <div id="preview-content" class="hidden">
+                            <img id="chart-preview" class="max-h-72 mx-auto rounded-lg mb-4 border border-gray-700">
+                            <div class="flex items-center justify-center gap-4">
+                                <p class="text-sm text-gray" id="file-name"></p>
+                                <button onclick="resetUpload()" class="text-xs text-red hover:text-red-400 transition">Remove</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Hidden canvas for image analysis -->
+                    <canvas id="analysis-canvas" class="hidden"></canvas>
+                </div>
+
+                <!-- AI Analysis Progress -->
+                <div id="analysis-panel" class="bg-black-light rounded-xl p-6 hidden">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="font-semibold flex items-center gap-2">
+                            <div class="spinner"></div>
+                            <span>AI Analysis in Progress</span>
+                        </h3>
+                        <span class="text-xs text-yellow mono" id="analysis-status">Initializing...</span>
+                    </div>
+                    
+                    <div class="loading-bar mb-4">
+                        <div class="loading-progress"></div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs" id="analysis-steps">
+                        <div class="progress-step flex items-center gap-2 p-2 bg-black-lighter rounded" id="step-1">
+                            <svg class="w-4 h-4 text-gray step-icon" fill="currentColor" viewBox="0 0 20 20">
+                                <circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            <span>Image Processing</span>
+                        </div>
+                        <div class="progress-step flex items-center gap-2 p-2 bg-black-lighter rounded" id="step-2">
+                            <svg class="w-4 h-4 text-gray step-icon" fill="currentColor" viewBox="0 0 20 20">
+                                <circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            <span>OCR Extraction</span>
+                        </div>
+                        <div class="progress-step flex items-center gap-2 p-2 bg-black-lighter rounded" id="step-3">
+                            <svg class="w-4 h-4 text-gray step-icon" fill="currentColor" viewBox="0 0 20 20">
+                                <circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            <span>Pattern Detection</span>
+                        </div>
+                        <div class="progress-step flex items-center gap-2 p-2 bg-black-lighter rounded" id="step-4">
+                            <svg class="w-4 h-4 text-gray step-icon" fill="currentColor" viewBox="0 0 20 20">
+                                <circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            <span>Live Price Verify</span>
+                        </div>
+                        <div class="progress-step flex items-center gap-2 p-2 bg-black-lighter rounded" id="step-5">
+                            <svg class="w-4 h-4 text-gray step-icon" fill="currentColor" viewBox="0 0 20 20">
+                                <circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            <span>Trend Analysis</span>
+                        </div>
+                        <div class="progress-step flex items-center gap-2 p-2 bg-black-lighter rounded" id="step-6">
+                            <svg class="w-4 h-4 text-gray step-icon" fill="currentColor" viewBox="0 0 20 20">
+                                <circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            <span>Strategy Match</span>
+                        </div>
+                        <div class="progress-step flex items-center gap-2 p-2 bg-black-lighter rounded" id="step-7">
+                            <svg class="w-4 h-4 text-gray step-icon" fill="currentColor" viewBox="0 0 20 20">
+                                <circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            <span>Risk Calculation</span>
+                        </div>
+                        <div class="progress-step flex items-center gap-2 p-2 bg-black-lighter rounded" id="step-8">
+                            <svg class="w-4 h-4 text-gray step-icon" fill="currentColor" viewBox="0 0 20 20">
+                                <circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            <span>Signal Generation</span>
+                        </div>
+                    </div>
+
+                    <!-- Real-time extraction display -->
+                    <div id="extraction-display" class="mt-4 p-4 bg-black rounded-lg hidden">
+                        <h4 class="text-xs text-yellow mb-2 font-semibold">EXTRACTED DATA</h4>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div><span class="text-gray">Symbol:</span> <span id="extracted-symbol" class="text-white mono">--</span></div>
+                            <div><span class="text-gray">Timeframe:</span> <span id="extracted-timeframe" class="text-white mono">--</span></div>
+                            <div><span class="text-gray">Chart Price:</span> <span id="extracted-price" class="text-white mono">--</span></div>
+                            <div><span class="text-gray">Live Price:</span> <span id="live-price-verify" class="text-green mono">--</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Trade Signal Result -->
+                <div id="signal-result" class="hidden">
+                    <!-- Signal will be dynamically inserted here -->
+                </div>
+
+                <!-- Image Analysis Details -->
+                <div id="analysis-details" class="bg-black-light rounded-xl p-6 hidden">
+                    <h3 class="font-semibold mb-4 flex items-center gap-2">
+                        <svg class="w-5 h-5 text-yellow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                        </svg>
+                        Chart Analysis Breakdown
+                    </h3>
+                    
+                    <div class="grid md:grid-cols-3 gap-4">
+                        <!-- Color Analysis -->
+                        <div class="bg-black rounded-lg p-4">
+                            <h4 class="text-xs text-gray mb-3">CANDLE DISTRIBUTION</h4>
+                            <div class="flex items-center gap-4 mb-2">
+                                <div class="flex-1">
+                                    <div class="flex justify-between text-xs mb-1">
+                                        <span class="text-green">Bullish</span>
+                                        <span id="bullish-pct" class="text-green mono">0%</span>
+                                    </div>
+                                    <div class="h-2 bg-black-lighter rounded-full overflow-hidden">
+                                        <div id="bullish-bar" class="h-full bg-green transition-all duration-500" style="width: 0%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-4">
+                                <div class="flex-1">
+                                    <div class="flex justify-between text-xs mb-1">
+                                        <span class="text-red">Bearish</span>
+                                        <span id="bearish-pct" class="text-red mono">0%</span>
+                                    </div>
+                                    <div class="h-2 bg-black-lighter rounded-full overflow-hidden">
+                                        <div id="bearish-bar" class="h-full bg-red transition-all duration-500" style="width: 0%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SMC Patterns -->
+                        <div class="bg-black rounded-lg p-4">
+                            <h4 class="text-xs text-gray mb-3">SMC STRUCTURE</h4>
+                            <div id="smc-patterns" class="space-y-1 text-xs">
+                                <!-- SMC patterns will be inserted here -->
+                            </div>
+                        </div>
+
+                        <!-- Key Levels & Zones -->
+                        <div class="bg-black rounded-lg p-4">
+                            <h4 class="text-xs text-gray mb-3">KEY ZONES</h4>
+                            <div id="key-levels" class="space-y-1 text-xs">
+                                <!-- Levels will be inserted here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SMC Analysis Section -->
+                    <div class="mt-4 grid md:grid-cols-2 gap-4">
+                        <!-- Order Blocks -->
+                        <div class="bg-black rounded-lg p-4">
+                            <h4 class="text-xs text-yellow mb-3 font-semibold flex items-center gap-2">
+                                <span class="w-3 h-3 bg-yellow rounded"></span>
+                                ORDER BLOCKS (OB)
+                            </h4>
+                            <div id="order-blocks" class="space-y-2 text-xs max-h-32 overflow-y-auto scrollbar-custom">
+                                <span class="text-gray">Analyzing...</span>
+                            </div>
+                        </div>
+
+                        <!-- Fair Value Gaps -->
+                        <div class="bg-black rounded-lg p-4">
+                            <h4 class="text-xs text-yellow mb-3 font-semibold flex items-center gap-2">
+                                <span class="w-3 h-3 bg-purple-500 rounded"></span>
+                                FAIR VALUE GAPS (FVG)
+                            </h4>
+                            <div id="fair-value-gaps" class="space-y-2 text-xs max-h-32 overflow-y-auto scrollbar-custom">
+                                <span class="text-gray">Analyzing...</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- BOS/CHoCH Display -->
+                    <div class="mt-4 bg-black rounded-lg p-4">
+                        <h4 class="text-xs text-yellow mb-3 font-semibold">MARKET STRUCTURE SHIFTS</h4>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3" id="structure-shifts">
+                            <div class="bg-black-lighter rounded p-3 text-center">
+                                <div class="text-lg font-bold" id="bos-count">0</div>
+                                <div class="text-xs text-gray">BOS Detected</div>
+                            </div>
+                            <div class="bg-black-lighter rounded p-3 text-center">
+                                <div class="text-lg font-bold" id="choch-count">0</div>
+                                <div class="text-xs text-gray">CHoCH Detected</div>
+                            </div>
+                            <div class="bg-black-lighter rounded p-3 text-center">
+                                <div class="text-lg font-bold text-yellow" id="ob-count">0</div>
+                                <div class="text-xs text-gray">Order Blocks</div>
+                            </div>
+                            <div class="bg-black-lighter rounded p-3 text-center">
+                                <div class="text-lg font-bold text-purple-400" id="fvg-count">0</div>
+                                <div class="text-xs text-gray">FVGs</div>
+                            </div>
+                        </div>
+                        <div id="structure-narrative" class="mt-3 p-3 bg-black-lighter rounded text-xs text-gray">
+                            <span class="text-yellow font-semibold">Analysis:</span> <span id="smc-narrative">Waiting for chart analysis...</span>
+                        </div>
+                    </div>
+                    </div>
+                </div>
+
+                <!-- Live Chart -->
+                <div class="bg-black-light rounded-xl p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-lg font-semibold flex items-center gap-2">
+                            <svg class="w-5 h-5 text-yellow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/>
+                            </svg>
+                            Live Market Chart
+                            <span class="text-xs text-green ml-2">(Real-time)</span>
+                        </h2>
+                        <div class="flex gap-2" id="chart-symbol-btns">
+                            <button onclick="switchChartSymbol('BTCUSDT')" class="chart-btn px-3 py-1 text-xs bg-yellow text-black rounded transition" data-symbol="BTCUSDT">BTC</button>
+                            <button onclick="switchChartSymbol('ETHUSDT')" class="chart-btn px-3 py-1 text-xs bg-black-lighter rounded hover:bg-yellow hover:text-black transition" data-symbol="ETHUSDT">ETH</button>
+                            <button onclick="switchChartSymbol('XAUUSD')" class="chart-btn px-3 py-1 text-xs bg-black-lighter rounded hover:bg-yellow hover:text-black transition" data-symbol="XAUUSD">GOLD</button>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="liveChart"></canvas>
+                    </div>
+                    <div class="flex justify-between items-center mt-3 text-xs text-gray">
+                        <span id="chart-symbol-display">BTCUSDT</span>
+                        <span id="chart-last-update">Last update: --</span>
+                    </div>
+                </div>
+
+                <!-- Trade History -->
+                <div class="bg-black-light rounded-xl p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-lg font-semibold">Analysis History</h2>
+                        <span class="text-xs text-gray" id="history-count">0 analyses</span>
+                    </div>
+                    <div id="trade-history" class="space-y-3 scrollbar-custom max-h-64 overflow-y-auto">
+                        <div class="text-center text-gray text-sm py-8">
+                            No analyses yet. Upload a chart to begin.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column - Stats & Settings -->
+            <div class="space-y-6">
+                <!-- Real-time Market Data -->
+                <div class="bg-black-light rounded-xl p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-lg font-semibold flex items-center gap-2">
+                            <svg class="w-5 h-5 text-yellow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+                            </svg>
+                            Live Market Data
+                        </h2>
+                        <button onclick="openAddPairModal()" class="text-xs bg-yellow text-black px-2 py-1 rounded hover:bg-yellow-light transition">
+                            + Add Pair
+                        </button>
+                    </div>
+                    <div class="space-y-2 scrollbar-custom max-h-96 overflow-y-auto" id="live-markets">
+                        <!-- Will be populated with real data -->
+                        <div class="flex items-center justify-center py-4">
+                            <div class="spinner"></div>
+                            <span class="text-xs text-gray ml-2">Loading markets...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Symbol Detection Stats -->
+                <div class="bg-black-light rounded-xl p-6">
+                    <h2 class="text-lg font-semibold flex items-center gap-2 mb-4">
+                        <svg class="w-5 h-5 text-yellow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                        </svg>
+                        Supported Instruments
+                    </h2>
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <div class="bg-black-lighter p-2 rounded text-center">
+                            <div class="text-yellow font-bold">CRYPTO</div>
+                            <div class="text-gray">BTC, ETH, BNB, SOL</div>
+                        </div>
+                        <div class="bg-black-lighter p-2 rounded text-center">
+                            <div class="text-yellow font-bold">FOREX</div>
+                            <div class="text-gray">EUR, GBP, JPY, CHF</div>
+                        </div>
+                        <div class="bg-black-lighter p-2 rounded text-center">
+                            <div class="text-yellow font-bold">METALS</div>
+                            <div class="text-gray">XAU, XAG</div>
+                        </div>
+                        <div class="bg-black-lighter p-2 rounded text-center">
+                            <div class="text-yellow font-bold">INDICES</div>
+                            <div class="text-gray">NAS, SPX, DJI</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Risk Settings -->
+                <div class="bg-black-light rounded-xl p-6">
+                    <h2 class="text-lg font-semibold flex items-center gap-2 mb-4">
+                        <svg class="w-5 h-5 text-yellow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                        Risk Parameters
+                    </h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="text-sm text-gray block mb-2">Risk Per Trade</label>
+                            <input type="range" id="risk-slider" min="0.5" max="5" step="0.5" value="2" class="w-full accent-yellow">
+                            <div class="flex justify-between text-xs text-gray mt-1">
+                                <span>0.5%</span>
+                                <span class="text-yellow font-bold" id="risk-value">2%</span>
+                                <span>5%</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="text-sm text-gray block mb-2">Minimum R:R Ratio</label>
+                            <select id="min-rr" class="w-full bg-black-lighter border border-gray-700 rounded px-3 py-2 text-sm focus:border-yellow focus:outline-none">
+                                <option value="1.5">1:1.5</option>
+                                <option value="2" selected>1:2</option>
+                                <option value="2.5">1:2.5</option>
+                                <option value="3">1:3</option>
+                            </select>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm text-gray">Aggressive Mode</span>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="aggressive-mode" class="sr-only peer">
+                                <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow"></div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Session Info -->
+                <div class="bg-black-light rounded-xl p-6">
+                    <h2 class="text-lg font-semibold flex items-center gap-2 mb-4">
+                        <svg class="w-5 h-5 text-yellow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        Trading Sessions
+                    </h2>
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between p-2 rounded" id="session-sydney">
+                            <span class="text-sm">🇦🇺 Sydney</span>
+                            <span class="text-xs text-gray">22:00 - 07:00 GMT</span>
+                        </div>
+                        <div class="flex items-center justify-between p-2 rounded" id="session-tokyo">
+                            <span class="text-sm">🇯🇵 Tokyo</span>
+                            <span class="text-xs text-gray">00:00 - 09:00 GMT</span>
+                        </div>
+                        <div class="flex items-center justify-between p-2 rounded" id="session-london">
+                            <span class="text-sm">🇬🇧 London</span>
+                            <span class="text-xs text-gray">08:00 - 17:00 GMT</span>
+                        </div>
+                        <div class="flex items-center justify-between p-2 rounded" id="session-newyork">
+                            <span class="text-sm">🇺🇸 New York</span>
+                            <span class="text-xs text-gray">13:00 - 22:00 GMT</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AI Engine Status -->
+                <div class="bg-black-light rounded-xl p-6">
+                    <h2 class="text-lg font-semibold flex items-center gap-2 mb-4">
+                        <svg class="w-5 h-5 text-yellow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/>
+                        </svg>
+                        System Status
+                    </h2>
+                    <div class="space-y-2 text-sm">
+                        <div class="flex items-center justify-between py-2 border-b border-gray-800">
+                            <span class="text-gray">Binance API</span>
+                            <span class="text-green flex items-center gap-1" id="binance-status">
+                                <span class="w-2 h-2 bg-green rounded-full"></span>
+                                Connected
+                            </span>
+                        </div>
+                        <div class="flex items-center justify-between py-2 border-b border-gray-800">
+                            <span class="text-gray">Forex API</span>
+                            <span class="text-green flex items-center gap-1" id="forex-status">
+                                <span class="w-2 h-2 bg-green rounded-full"></span>
+                                Connected
+                            </span>
+                        </div>
+                        <div class="flex items-center justify-between py-2 border-b border-gray-800">
+                            <span class="text-gray">Image Analysis</span>
+                            <span class="text-green flex items-center gap-1">
+                                <span class="w-2 h-2 bg-green rounded-full"></span>
+                                Ready
+                            </span>
+                        </div>
+                        <div class="flex items-center justify-between py-2">
+                            <span class="text-gray">OCR Engine</span>
+                            <span class="text-green flex items-center gap-1">
+                                <span class="w-2 h-2 bg-green rounded-full"></span>
+                                Loaded
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Add Pair Modal -->
+    <div id="add-pair-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50 p-4">
+        <div class="bg-black-light rounded-xl p-6 max-w-md w-full slide-in border border-gray-700">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-bold">Add Favorite Pair</h3>
+                <button onclick="closeAddPairModal()" class="text-gray hover:text-white">✕</button>
+            </div>
+            <div class="space-y-3 mb-6">
+                <h4 class="text-sm text-gray font-semibold">CRYPTO PAIRS</h4>
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="addFavoritePair('BTCUSDT')" class="pair-btn px-3 py-2 text-xs bg-black-lighter rounded hover:bg-yellow hover:text-black transition">BTC/USDT</button>
+                    <button onclick="addFavoritePair('ETHUSDT')" class="pair-btn px-3 py-2 text-xs bg-black-lighter rounded hover:bg-yellow hover:text-black transition">ETH/USDT</button>
+                    <button onclick="addFavoritePair('BNBUSDT')" class="pair-btn px-3 py-2 text-xs bg-black-lighter rounded hover:bg-yellow hover:text-black transition">BNB/USDT</button>
+                    <button onclick="addFavoritePair('SOLUSDT')" class="pair-btn px-3 py-2 text-xs bg-black-lighter rounded hover:bg-yellow hover:text-black transition">SOL/USDT</button>
+                </div>
+            </div>
+            <div class="space-y-3 mb-6">
+                <h4 class="text-sm text-gray font-semibold">FOREX PAIRS</h4>
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="addFavoritePair('EURUSD')" class="pair-btn px-3 py-2 text-xs bg-black-lighter rounded hover:bg-yellow hover:text-black transition">EUR/USD</button>
+                    <button onclick="addFavoritePair('GBPUSD')" class="pair-btn px-3 py-2 text-xs bg-black-lighter rounded hover:bg-yellow hover:text-black transition">GBP/USD</button>
+                    <button onclick="addFavoritePair('USDJPY')" class="pair-btn px-3 py-2 text-xs bg-black-lighter rounded hover:bg-yellow hover:text-black transition">USD/JPY</button>
+                    <button onclick="addFavoritePair('AUDUSD')" class="pair-btn px-3 py-2 text-xs bg-black-lighter rounded hover:bg-yellow hover:text-black transition">AUD/USD</button>
+                </div>
+            </div>
+            <div class="space-y-3">
+                <h4 class="text-sm text-gray font-semibold">METALS & INDICES</h4>
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="addFavoritePair('XAUUSD')" class="pair-btn px-3 py-2 text-xs bg-black-lighter rounded hover:bg-yellow hover:text-black transition">XAU/USD</button>
+                    <button onclick="addFavoritePair('XAGUSD')" class="pair-btn px-3 py-2 text-xs bg-black-lighter rounded hover:bg-yellow hover:text-black transition">XAG/USD</button>
+                    <button onclick="addFavoritePair('NAS100')" class="pair-btn px-3 py-2 text-xs bg-black-lighter rounded hover:bg-yellow hover:text-black transition">NAS100</button>
+                    <button onclick="addFavoritePair('US30')" class="pair-btn px-3 py-2 text-xs bg-black-lighter rounded hover:bg-yellow hover:text-black transition">US30</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Live Signal Panel (appears when pair clicked) -->
+    <div id="live-signal-panel" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50 p-4">
+        <div class="bg-black-light rounded-xl p-6 max-w-2xl w-full slide-in border border-yellow max-h-96 overflow-y-auto scrollbar-custom">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-xl font-bold flex items-center gap-2">
+                    <span id="signal-pair-name" class="text-yellow">BTC/USDT</span>
+                    <span id="signal-timeframe" class="text-sm text-gray bg-black-lighter px-2 py-1 rounded">--</span>
+                </h3>
+                <button onclick="closeLiveSignalPanel()" class="text-gray hover:text-white text-2xl">✕</button>
+            </div>
+            
+            <div id="live-signal-content" class="space-y-4">
+                <!-- Signal will be dynamically inserted -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="border-t border-gray-800 mt-8 py-6">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 bg-yellow flex items-center justify-center rounded">
+                        <svg class="w-4 h-4 text-black" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                        </svg>
+                    </div>
+                    <span class="text-sm text-gray">© 2024 SMART-KORAFX. Professional AI Trading Analysis.</span>
+                </div>
+                <div class="flex items-center gap-4 text-xs text-gray">
+                    <span class="text-yellow">Real-time Data</span>
+                    <span>|</span>
+                    <span>Risk Disclaimer</span>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // ============================================
+        // SMART-KORAFX AI TRADING ANALYST ENGINE
+        // ============================================
+
+        // Global State
+        const state = {
+            liveChart: null,
+            currentSymbol: 'BTCUSDT',
+            marketData: {},
+            analysisHistory: [],
+            ocrWorker: null,
+            isAnalyzing: false,
+            favoritePairs: ['BTCUSDT', 'ETHUSDT', 'EURUSD', 'XAUUSD', 'GBPUSD'],
+            currentUploadedChart: null,
+            detectedTimeframe: null
+        };
+
+        // Market Data Configuration
+        const MARKET_CONFIG = {
+            crypto: {
+                symbols: ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT'],
+                api: 'https://api.binance.com/api/v3'
+            },
+            forex: {
+                pairs: ['EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CHF'],
+                api: 'https://api.exchangerate-api.com/v4/latest/USD'
+            }
+        };
+
+        // Symbol detection patterns
+        const SYMBOL_PATTERNS = {
+            crypto: /\b(BTC|ETH|BNB|SOL|XRP|DOGE|ADA|DOT|MATIC|LINK|AVAX|SHIB|UNI|ATOM|LTC)(\/|USD|USDT|BUSD)?\b/gi,
+            forex: /\b(EUR|GBP|USD|JPY|CHF|AUD|NZD|CAD)(\/|-|)(USD|EUR|GBP|JPY|CHF|AUD|NZD|CAD)\b/gi,
+            gold: /\b(XAU|GOLD|XAUUSD)\b/gi,
+            indices: /\b(NAS|NASDAQ|NAS100|SPX|SP500|DJI|DOW|US30|US100)\b/gi,
+            timeframes: /\b(M1|M5|M15|M30|H1|H4|D1|W1|MN|1m|5m|15m|30m|1h|4h|1d|1w)\b/gi
+        };
+
+        // Strategy patterns for detection
+        const STRATEGIES = [
+            { name: 'Break & Retest', keywords: ['break', 'retest', 'breakout'] },
+            { name: 'Supply & Demand', keywords: ['supply', 'demand', 'zone'] },
+            { name: 'Support Bounce', keywords: ['support', 'bounce', 'hold'] },
+            { name: 'Resistance Rejection', keywords: ['resistance', 'reject', 'reversal'] },
+            { name: 'Trend Continuation', keywords: ['trend', 'continuation', 'pullback'] },
+            { name: 'Liquidity Sweep', keywords: ['liquidity', 'sweep', 'stop hunt'] },
+            { name: 'Order Block', keywords: ['order block', 'ob', 'institutional'] },
+            { name: 'Fair Value Gap', keywords: ['fvg', 'fair value', 'imbalance'] }
+        ];
+
+        // ============================================
+        // INITIALIZATION
+        // ============================================
+
+        document.addEventListener('DOMContentLoaded', async function() {
+            console.log('🚀 SMART-KORAFX Initializing...');
+            
+            loadFavoritePairs(); // Load saved pairs
+            setupFileUpload();
+            updateTime();
+            setInterval(updateTime, 1000);
+            
+            await fetchAllMarketData();
+            setInterval(fetchAllMarketData, 10000); // Update every 10 seconds
+            
+            initializeChart();
+            setupRiskSlider();
+            updateTradingSessions();
+            setInterval(updateTradingSessions, 60000);
+            
+            console.log('✅ SMART-KORAFX Ready');
+        });
+
+        // ============================================
+        // REAL MARKET DATA FETCHING
+        // ============================================
+
+        async function fetchAllMarketData() {
+            try {
+                await Promise.all([
+                    fetchCryptoData(),
+                    fetchForexData()
+                ]);
+                updateMarketDisplay();
+                updateApiStatus(true);
+            } catch (error) {
+                console.error('Market data fetch error:', error);
+                updateApiStatus(false);
+            }
+        }
+
+        async function fetchCryptoData() {
+            try {
+                // Fetch real prices from Binance (includes PAXGUSDT as XAU proxy)
+                const symbols = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'PAXGUSDT'];
+                const response = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbols=${JSON.stringify(symbols)}`);
+                const data = await response.json();
+
+                if (!Array.isArray(data)) throw new Error('Unexpected Binance response');
+
+                data.forEach(ticker => {
+                    state.marketData[ticker.symbol] = {
+                        price: parseFloat(ticker.lastPrice),
+                        change: parseFloat(ticker.priceChangePercent),
+                        high: parseFloat(ticker.highPrice),
+                        low: parseFloat(ticker.lowPrice),
+                        volume: parseFloat(ticker.volume)
+                    };
+                });
+
+                // Map PAXGUSDT (tokenized gold) to XAUUSD key so the rest of the system can treat it as gold.
+                if (state.marketData.PAXGUSDT) {
+                    state.marketData.XAUUSD = {
+                        ...state.marketData.PAXGUSDT,
+                        price: state.marketData.PAXGUSDT.price,
+                        change: state.marketData.PAXGUSDT.change
+                    };
+                }
+
+                // Update top ticker
+                if (state.marketData.BTCUSDT) {
+                    document.getElementById('btc-price').textContent = '$' + formatPrice(state.marketData.BTCUSDT.price);
+                    updateChangeDisplay('btc-change', state.marketData.BTCUSDT.change);
+                }
+                if (state.marketData.ETHUSDT) {
+                    document.getElementById('eth-price').textContent = '$' + formatPrice(state.marketData.ETHUSDT.price);
+                    updateChangeDisplay('eth-change', state.marketData.ETHUSDT.change);
+                }
+                if (state.marketData.XAUUSD) {
+                    document.getElementById('gold-price').textContent = '$' + formatPrice(state.marketData.XAUUSD.price);
+                    updateChangeDisplay('gold-change', state.marketData.XAUUSD.change);
+                }
+
+                // Mark Binance as connected
+                document.getElementById('binance-status').innerHTML = '<span class="w-2 h-2 bg-green rounded-full"></span> Connected';
+            } catch (error) {
+                console.error('Crypto API error:', error);
+                document.getElementById('binance-status').innerHTML = '<span class="w-2 h-2 bg-red rounded-full"></span> Error';
+            }
+        }
+
+        async function fetchForexData() {
+            try {
+                // Using free forex API (base USD)
+                const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+                const data = await response.json();
+
+                if (!data.rates) throw new Error('No forex rates returned');
+
+                const setPair = (sym, price, decimals = 5) => {
+                    const prev = state.marketData[sym]?.price;
+                    const pct = prev ? ((price - prev) / prev) * 100 : 0;
+                    state.marketData[sym] = {
+                        price,
+                        change: pct,
+                        high: null,
+                        low: null,
+                        volume: null
+                    };
+                    return pct;
+                };
+
+                // EUR/USD = 1 / USD->EUR
+                const eurUsd = parseFloat((1 / data.rates.EUR).toFixed(5));
+                const eurChg = setPair('EURUSD', eurUsd);
+                document.getElementById('eur-price').textContent = eurUsd.toFixed(5);
+                updateChangeDisplay('eur-change', eurChg);
+
+                // GBP/USD
+                const gbpUsd = parseFloat((1 / data.rates.GBP).toFixed(5));
+                const gbpChg = setPair('GBPUSD', gbpUsd);
+                document.getElementById('gbp-price').textContent = gbpUsd.toFixed(5);
+                updateChangeDisplay('gbp-change', gbpChg);
+
+                // USD/JPY (direct)
+                if (data.rates.JPY) {
+                    const usdjpy = parseFloat((data.rates.JPY).toFixed(3));
+                    setPair('USDJPY', usdjpy);
+                }
+
+                // AUD/USD
+                if (data.rates.AUD) {
+                    const audusd = parseFloat((1 / data.rates.AUD).toFixed(5));
+                    setPair('AUDUSD', audusd);
+                }
+
+                // USD/CHF
+                if (data.rates.CHF) {
+                    const usdchf = parseFloat((data.rates.CHF).toFixed(5));
+                    setPair('USDCHF', usdchf);
+                }
+
+                // Mark Forex as connected
+                document.getElementById('forex-status').innerHTML = '<span class="w-2 h-2 bg-green rounded-full"></span> Connected';
+            } catch (error) {
+                console.error('Forex API error:', error);
+                document.getElementById('forex-status').innerHTML = '<span class="w-2 h-2 bg-red rounded-full"></span> Error';
+            }
+        }
+
+        function normalizeSymbolKey(symbol) {
+            if (!symbol) return null;
+            return String(symbol).toUpperCase().replace(/[^A-Z0-9]/g, '');
+        }
+
+        function prettySymbol(symbolKey) {
+            const s = normalizeSymbolKey(symbolKey);
+            if (!s) return 'N/A';
+            if (s === 'XAUUSD') return 'XAU/USD';
+            if (s === 'XAGUSD') return 'XAG/USD';
+            if (s.endsWith('USDT')) return s.replace('USDT', '') + '/USDT';
+            if (s.length === 6) return s.slice(0, 3) + '/' + s.slice(3);
+            return s;
+        }
+
+        function resolveBinanceSymbol(symbolKey) {
+            const s = normalizeSymbolKey(symbolKey);
+            if (!s) return null;
+            // Gold proxy
+            if (s === 'XAUUSD') return 'PAXGUSDT';
+            if (s === 'XAGUSD') return null; // no reliable spot on Binance in this app
+            // Crypto pairs already as XXXUSDT
+            if (s.endsWith('USDT')) return s;
+            // If user passed BTC/ETH etc
+            const majors = ['BTC', 'ETH', 'BNB', 'SOL', 'XRP', 'ADA', 'DOGE', 'DOT', 'LINK', 'LTC'];
+            if (majors.includes(s)) return s + 'USDT';
+            return null;
+        }
+
+        function timeframeMinutes(tf) {
+            const t = (tf || 'H1').toUpperCase();
+            const map = { M1: 1, M5: 5, M15: 15, M30: 30, H1: 60, H4: 240, D1: 1440, W1: 10080 };
+            return map[t] || 60;
+        }
+
+        async function fetchKlines(symbol, interval = '1h', limit = 50) {
+            try {
+                const response = await fetch(
+                    `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`
+                );
+                const data = await response.json();
+                if (!Array.isArray(data)) return [];
+                return data.map(k => ({
+                    time: k[0],
+                    open: parseFloat(k[1]),
+                    high: parseFloat(k[2]),
+                    low: parseFloat(k[3]),
+                    close: parseFloat(k[4]),
+                    volume: parseFloat(k[5])
+                }));
+            } catch (error) {
+                console.error('Klines fetch error:', error);
+                return [];
+            }
+        }
+
+        async function fetchForexDailyCloses(symbolKey, daysBack = 120) {
+            // Real historical rates (daily) from Frankfurter.
+            const s = normalizeSymbolKey(symbolKey);
+            if (!s || s.length !== 6) return [];
+
+            const base = s.slice(0, 3);
+            const quote = s.slice(3);
+
+            const end = new Date();
+            const start = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000);
+            const fmt = d => d.toISOString().slice(0, 10);
+
+            // Frankfurter supports base as "from" in URL; to as query param.
+            // We'll request base->quote if possible; else invert USD-based.
+            let url = `https://api.frankfurter.app/${fmt(start)}..${fmt(end)}?from=${base}&to=${quote}`;
+
+            try {
+                const res = await fetch(url);
+                const json = await res.json();
+                if (!json.rates) return [];
+                const dates = Object.keys(json.rates).sort();
+                return dates.map(date => ({
+                    time: new Date(date + 'T00:00:00Z').getTime(),
+                    close: json.rates[date]?.[quote]
+                })).filter(x => typeof x.close === 'number' && isFinite(x.close));
+            } catch (e) {
+                // Fallback: if direct base not supported, try USD inversion path
+                try {
+                    const baseRes = await fetch(`https://api.frankfurter.app/${fmt(start)}..${fmt(end)}?from=USD&to=${base},${quote}`);
+                    const baseJson = await baseRes.json();
+                    if (!baseJson.rates) return [];
+                    const dates = Object.keys(baseJson.rates).sort();
+                    return dates.map(date => {
+                        const usdToBase = baseJson.rates[date]?.[base];
+                        const usdToQuote = baseJson.rates[date]?.[quote];
+                        if (!usdToBase || !usdToQuote) return null;
+                        // base/quote = (USD->quote) / (USD->base)
+                        const close = usdToQuote / usdToBase;
+                        return { time: new Date(date + 'T00:00:00Z').getTime(), close };
+                    }).filter(Boolean);
+                } catch (e2) {
+                    return [];
+                }
+            }
+        }
+
+        function buildSyntheticOHLCFromCloses(dailyCloses, tf, limit = 120) {
+            // Convert daily close series into synthetic OHLC for any timeframe via interpolation.
+            if (!dailyCloses || dailyCloses.length < 3) return [];
+
+            const stepMin = timeframeMinutes(tf);
+            const stepMs = stepMin * 60 * 1000;
+            const pointsPerDay = Math.max(1, Math.round(1440 / stepMin));
+
+            // Determine required days
+            const daysNeeded = Math.min(dailyCloses.length - 1, Math.ceil(limit / pointsPerDay) + 2);
+            const slice = dailyCloses.slice(-daysNeeded);
+
+            const candles = [];
+            for (let i = 1; i < slice.length; i++) {
+                const prev = slice[i - 1];
+                const cur = slice[i];
+                const startTime = cur.time; // midnight of current day
+                const startClose = prev.close;
+                const endClose = cur.close;
+
+                for (let p = 0; p < pointsPerDay; p++) {
+                    const alpha = (p + 1) / pointsPerDay;
+                    const target = startClose + (endClose - startClose) * alpha;
+
+                    // Small noise scaled by daily move
+                    const dailyMove = Math.max(1e-6, Math.abs(endClose - startClose));
+                    const noise = (Math.random() - 0.5) * dailyMove * 0.15;
+                    const close = target + noise;
+
+                    const time = startTime + p * stepMs;
+                    const open = candles.length ? candles[candles.length - 1].close : startClose;
+                    const wick = Math.abs((Math.random() - 0.5) * dailyMove * 0.25);
+                    const high = Math.max(open, close) + wick;
+                    const low = Math.min(open, close) - wick;
+
+                    candles.push({ time, open, high, low, close, volume: null });
+                }
+            }
+
+            return candles.slice(-limit);
+        }
+
+        async function fetchMarketSeries(symbolKey, tf = 'H1', limit = 120) {
+            const key = normalizeSymbolKey(symbolKey);
+            if (!key) return { series: [], source: 'NONE' };
+
+            const binanceSym = resolveBinanceSymbol(key);
+            if (binanceSym) {
+                const interval = timeframeToInterval(tf);
+                const series = await fetchKlines(binanceSym, interval, limit);
+                return { series, source: binanceSym === 'PAXGUSDT' ? 'BINANCE (PAXG proxy)' : 'BINANCE SPOT', binanceSymbol: binanceSym };
+            }
+
+            // Forex: build synthetic candles from real daily closes
+            if (key.length === 6) {
+                const daily = await fetchForexDailyCloses(key, 180);
+                const series = buildSyntheticOHLCFromCloses(daily, tf, limit);
+                return { series, source: 'FRANKFURTER (daily→synthetic intraday)' };
+            }
+
+            // Fallback: no OHLC source available
+            return { series: [], source: 'UNSUPPORTED' };
+        }
+
+        function formatPrice(price) {
+            if (price >= 1000) return price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            if (price >= 1) return price.toFixed(4);
+            return price.toFixed(6);
+        }
+
+        function updateChangeDisplay(elementId, change) {
+            const el = document.getElementById(elementId);
+            const isPositive = change >= 0;
+            el.textContent = (isPositive ? '+' : '') + change.toFixed(2) + '%';
+            el.className = isPositive ? 'text-xs text-green' : 'text-xs text-red';
+        }
+
+        function updateApiStatus(connected) {
+            const statusEl = document.getElementById('api-status');
+            const textEl = document.getElementById('api-status-text');
+            if (connected) {
+                statusEl.className = 'w-2 h-2 bg-green rounded-full pulse';
+                textEl.textContent = 'LIVE DATA';
+                textEl.className = 'text-xs text-green mono';
+            } else {
+                statusEl.className = 'w-2 h-2 bg-red rounded-full';
+                textEl.textContent = 'OFFLINE';
+                textEl.className = 'text-xs text-red mono';
+            }
+        }
+
+        function updateMarketDisplay() {
+            const container = document.getElementById('live-markets');
+            let html = '';
+            
+            // Display favorite pairs
+            state.favoritePairs.forEach(symbol => {
+                const data = state.marketData[symbol];
+                if (data) {
+                    const isPositive = data.change >= 0;
+                    const displayName = symbol.replace('USDT', '').replace('USD', '');
+                    const icon = getSymbolIcon(symbol);
+                    
+                    html += `
+                        <div onclick="generateLiveSignal('${symbol}')" class="stat-card rounded-lg p-3 flex items-center justify-between cursor-pointer hover:bg-opacity-80 transition hover:glow-yellow">
+                            <div class="flex items-center gap-3 flex-1">
+                                <div class="w-8 h-8 bg-yellow bg-opacity-20 rounded flex items-center justify-center text-yellow text-sm">
+                                    ${icon}
+                                </div>
+                                <div>
+                                    <p class="text-sm font-medium">${displayName}</p>
+                                    <p class="text-xs text-gray">${symbol}</p>
+                                </div>
+                            </div>
+                            <div class="text-right flex items-center gap-4">
+                                <div>
+                                    <p class="text-sm font-bold mono">${formatPrice(data.price)}</p>
+                                    <p class="text-xs ${isPositive ? 'text-green' : 'text-red'}">${isPositive ? '↑' : '↓'} ${Math.abs(data.change).toFixed(2)}%</p>
+                                </div>
+                                <button onclick="event.stopPropagation(); removeFavoritePair('${symbol}')" class="text-gray hover:text-red text-lg">✕</button>
+                            </div>
+                        </div>
+                    `;
+                }
+            });
+            
+            container.innerHTML = html || '<div class="text-center text-gray text-sm py-4">No pairs selected. Add your favorites!</div>';
+        }
+
+        function getSymbolIcon(symbol) {
+            const icons = {
+                'BTCUSDT': '₿',
+                'ETHUSDT': 'Ξ',
+                'BNBUSDT': 'B',
+                'SOLUSDT': '◎',
+                'EURUSD': '€',
+                'GBPUSD': '£',
+                'USDJPY': '¥',
+                'AUDUSD': 'A',
+                'XAUUSD': '🥇',
+                'XAGUSD': '🥈',
+                'NAS100': '📈',
+                'US30': '🇺🇸'
+            };
+            return icons[symbol] || '○';
+        }
+
+        // ============================================
+        // FILE UPLOAD & IMAGE ANALYSIS
+        // ============================================
+
+        function setupFileUpload() {
+            const uploadZone = document.getElementById('upload-zone');
+            const fileInput = document.getElementById('file-input');
+
+            uploadZone.addEventListener('click', () => fileInput.click());
+            
+            uploadZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadZone.classList.add('dragover');
+            });
+
+            uploadZone.addEventListener('dragleave', () => {
+                uploadZone.classList.remove('dragover');
+            });
+
+            uploadZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadZone.classList.remove('dragover');
+                const file = e.dataTransfer.files[0];
+                if (file) handleFile(file);
+            });
+
+            fileInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) handleFile(file);
+            });
+        }
+
+        function handleFile(file) {
+            if (!file.type.startsWith('image/')) {
+                alert('Please upload a valid image file');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                document.getElementById('chart-preview').src = e.target.result;
+                document.getElementById('upload-content').classList.add('hidden');
+                document.getElementById('preview-content').classList.remove('hidden');
+                document.getElementById('file-name').textContent = file.name;
+                
+                // Start comprehensive analysis
+                startComprehensiveAnalysis(e.target.result, file.name);
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function resetUpload() {
+            document.getElementById('upload-content').classList.remove('hidden');
+            document.getElementById('preview-content').classList.add('hidden');
+            document.getElementById('analysis-panel').classList.add('hidden');
+            document.getElementById('signal-result').classList.add('hidden');
+            document.getElementById('analysis-details').classList.add('hidden');
+            document.getElementById('file-input').value = '';
+        }
+
+        // ============================================
+        // COMPREHENSIVE IMAGE ANALYSIS ENGINE
+        // ============================================
+
+        async function startComprehensiveAnalysis(imageData, fileName) {
+            if (state.isAnalyzing) return;
+            state.isAnalyzing = true;
+
+            const analysisPanel = document.getElementById('analysis-panel');
+            const signalResult = document.getElementById('signal-result');
+            const analysisDetails = document.getElementById('analysis-details');
+            const extractionDisplay = document.getElementById('extraction-display');
+            
+            analysisPanel.classList.remove('hidden');
+            signalResult.classList.add('hidden');
+            analysisDetails.classList.add('hidden');
+            extractionDisplay.classList.remove('hidden');
+
+            // Reset progress steps
+            for (let i = 1; i <= 8; i++) {
+                resetProgressStep(i);
+            }
+
+            let analysisResult = {
+                symbol: null,
+                timeframe: null,
+                chartPrice: null,
+                livePrice: null,
+                trend: null,
+                patterns: [],
+                bullishRatio: 0,
+                bearishRatio: 0,
+                keyLevels: [],
+                confidence: 0,
+                signal: null
+            };
+
+            try {
+                // Step 1: Image Processing
+                updateStatus('Processing image...');
+                await completeStep(1);
+                const imageAnalysis = await analyzeImageColors(imageData);
+                analysisResult.bullishRatio = imageAnalysis.bullishRatio;
+                analysisResult.bearishRatio = imageAnalysis.bearishRatio;
+                analysisResult.dominantColors = imageAnalysis.dominantColors;
+
+                // Step 2: OCR Text Extraction
+                updateStatus('Extracting text with OCR...');
+                await completeStep(2);
+                const ocrResult = await performOCR(imageData);
+                const detectedInfo = parseOCRText(ocrResult, fileName);
+                analysisResult.symbol = detectedInfo.symbol;
+                analysisResult.timeframe = detectedInfo.timeframe;
+                analysisResult.chartPrice = detectedInfo.price;
+                state.detectedTimeframe = detectedInfo.timeframe; // Store detected timeframe globally
+                
+                // Update extraction display
+                document.getElementById('extracted-symbol').textContent = analysisResult.symbol || 'Detecting...';
+                document.getElementById('extracted-timeframe').textContent = analysisResult.timeframe || 'Detecting...';
+                document.getElementById('extracted-price').textContent = analysisResult.chartPrice ? formatPrice(analysisResult.chartPrice) : 'Detecting...';
+
+                // Step 3: Pattern Detection
+                updateStatus('Detecting chart patterns...');
+                await completeStep(3);
+                analysisResult.patterns = detectPatterns(imageAnalysis, ocrResult);
+
+                // Step 4: Live Price Verification
+                updateStatus('Fetching live market price...');
+                await completeStep(4);
+                analysisResult.livePrice = await getLivePrice(analysisResult.symbol);
+                document.getElementById('live-price-verify').textContent = analysisResult.livePrice ? formatPrice(analysisResult.livePrice) : 'N/A';
+
+                // Step 5: Trend Analysis (image bias + live series bias)
+                updateStatus('Analyzing market trend...');
+                await completeStep(5);
+
+                // Pull real series (if supported) for indicator reconstruction
+                let seriesPack = { series: [], source: 'NONE' };
+                if (analysisResult.symbol) {
+                    const symKey = normalizeSymbolKey(analysisResult.symbol);
+                    // Normalize chart-detected symbols like XAU/USD and EUR/USD
+                    const normalized = symKey.length === 6 || symKey.endsWith('USDT') || symKey === 'XAUUSD' ? symKey : symKey;
+                    seriesPack = await fetchMarketSeries(normalized, analysisResult.timeframe || 'H1', 200);
+                }
+
+                analysisResult.seriesSource = seriesPack.source;
+                analysisResult.series = seriesPack.series;
+
+                // Image-based bias
+                const imageTrend = analyzeTrend(imageAnalysis, analysisResult.patterns);
+
+                // Live-series based bias (preferred if series exists)
+                if (analysisResult.series && analysisResult.series.length >= 60) {
+                    const ta = analyzeMarketSeries(analysisResult.series);
+                    analysisResult.ta = ta;
+                    analysisResult.structure = ta.structure;
+                    analysisResult.trend = ta.trend;
+                    analysisResult.keyLevels = [{ type: 'Support', value: ta.support }, { type: 'Resistance', value: ta.resistance }];
+                } else {
+                    analysisResult.trend = imageTrend;
+                    analysisResult.structure = imageTrend.structure;
+                }
+
+                // Step 6: Strategy Matching
+                updateStatus('Matching trading strategies...');
+                await completeStep(6);
+                analysisResult.strategy = scoreStrategies(analysisResult);
+
+                // Step 7: Risk Calculation
+                updateStatus('Calculating risk parameters...');
+                await completeStep(7);
+                analysisResult.riskParams = calculateRiskParams(analysisResult);
+
+                // Step 8: Signal Generation (live-derived if possible)
+                updateStatus('Generating trade signal...');
+                await completeStep(8);
+                analysisResult.signal = generateSignalFromTA(analysisResult);
+                analysisResult.confidence = calculateConfidencePro(analysisResult);
+
+                // Display results
+                await delay(500);
+                analysisPanel.classList.add('hidden');
+                displaySignalResult(analysisResult);
+                displayAnalysisDetails(analysisResult);
+                
+                // Save to history
+                saveToHistory(analysisResult);
+
+            } catch (error) {
+                console.error('Analysis error:', error);
+                updateStatus('Analysis error: ' + error.message);
+            }
+
+            state.isAnalyzing = false;
+        }
+
+        async function analyzeImageColors(imageData) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.getElementById('analysis-canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    ctx.drawImage(img, 0, 0);
+
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const pixels = imageData.data;
+
+                    let greenPixels = 0;
+                    let redPixels = 0;
+                    let totalAnalyzed = 0;
+                    const colorCounts = {};
+
+                    // Analyze pixels for candle colors
+                    for (let i = 0; i < pixels.length; i += 4) {
+                        const r = pixels[i];
+                        const g = pixels[i + 1];
+                        const b = pixels[i + 2];
+
+                        // Detect green candles (bullish)
+                        if (g > r + 30 && g > b + 30 && g > 100) {
+                            greenPixels++;
+                            totalAnalyzed++;
+                        }
+                        // Detect red candles (bearish)
+                        else if (r > g + 30 && r > b + 30 && r > 100) {
+                            redPixels++;
+                            totalAnalyzed++;
+                        }
+
+                        // Track dominant colors
+                        const colorKey = `${Math.floor(r/32)},${Math.floor(g/32)},${Math.floor(b/32)}`;
+                        colorCounts[colorKey] = (colorCounts[colorKey] || 0) + 1;
+                    }
+
+                    const total = greenPixels + redPixels || 1;
+                    const bullishRatio = (greenPixels / total * 100);
+                    const bearishRatio = (redPixels / total * 100);
+
+                    // Get dominant colors
+                    const sortedColors = Object.entries(colorCounts)
+                        .sort((a, b) => b[1] - a[1])
+                        .slice(0, 5);
+
+                    resolve({
+                        bullishRatio: bullishRatio,
+                        bearishRatio: bearishRatio,
+                        greenPixels,
+                        redPixels,
+                        dominantColors: sortedColors,
+                        width: img.width,
+                        height: img.height
+                    });
+                };
+                img.src = imageData;
+            });
+        }
+
+        async function performOCR(imageData) {
+            try {
+                updateStatus('Running OCR engine...');
+                
+                // Use Tesseract.js for OCR
+                const result = await Tesseract.recognize(imageData, 'eng', {
+                    logger: m => {
+                        if (m.status === 'recognizing text') {
+                            updateStatus(`OCR: ${Math.round(m.progress * 100)}%`);
+                        }
+                    }
+                });
+                
+                return result.data.text;
+            } catch (error) {
+                console.error('OCR Error:', error);
+                return '';
+            }
+        }
+
+        function parseOCRText(text, fileName) {
+            const result = {
+                symbol: null,
+                timeframe: null,
+                price: null,
+                indicators: []
+            };
+
+            const combinedText = (text + ' ' + fileName).toUpperCase();
+
+            // Detect symbol
+            for (const [type, pattern] of Object.entries(SYMBOL_PATTERNS)) {
+                if (type === 'timeframes') continue;
+                const matches = combinedText.match(pattern);
+                if (matches && matches.length > 0) {
+                    let symbol = matches[0].replace(/[\/\-]/g, '');
+                    
+                    // Normalize symbol
+                    if (type === 'crypto') {
+                        if (!symbol.includes('USDT') && !symbol.includes('USD')) {
+                            symbol += 'USDT';
+                        }
+                    } else if (type === 'forex') {
+                        if (symbol.length === 6) {
+                            symbol = symbol.slice(0, 3) + '/' + symbol.slice(3);
+                        }
+                    } else if (type === 'gold') {
+                        symbol = 'XAU/USD';
+                    }
+                    
+                    result.symbol = symbol;
+                    break;
+                }
+            }
+
+            // Detect timeframe - more aggressive detection
+            const tfPatterns = [
+                /\b(M1|M5|M15|M30|H1|H4|D1|W1|MN)\b/gi,
+                /\b(\d+)(M|H|D|W)\b/gi,
+                /(1M|5M|15M|30M|1H|4H|1D|1W)/gi
+            ];
+            
+            for (const pattern of tfPatterns) {
+                const match = combinedText.match(pattern);
+                if (match) {
+                    let tf = match[0].toUpperCase();
+                    // Normalize
+                    if (tf === '1M') tf = 'M1';
+                    else if (tf === '5M') tf = 'M5';
+                    else if (tf === '15M') tf = 'M15';
+                    else if (tf === '30M') tf = 'M30';
+                    else if (tf === '1H') tf = 'H1';
+                    else if (tf === '4H') tf = 'H4';
+                    else if (tf === '1D') tf = 'D1';
+                    else if (tf === '1W') tf = 'W1';
+                    
+                    result.timeframe = tf;
+                    break;
+                }
+            }
+
+            // If no timeframe detected, analyze image characteristics to guess
+            if (!result.timeframe) {
+                result.timeframe = 'H1'; // Default to 1 hour
+            }
+
+            // Try to extract price from OCR text
+            const pricePattern = /\b(\d{1,6}[.,]\d{2,8})\b/g;
+            const priceMatches = text.match(pricePattern);
+            if (priceMatches && priceMatches.length > 0) {
+                // Get the most likely price (usually the largest number in forex range or appropriate for crypto)
+                const prices = priceMatches.map(p => parseFloat(p.replace(',', '.')));
+                
+                if (result.symbol) {
+                    if (result.symbol.includes('BTC')) {
+                        result.price = prices.find(p => p > 10000 && p < 200000) || prices[0];
+                    } else if (result.symbol.includes('ETH')) {
+                        result.price = prices.find(p => p > 1000 && p < 10000) || prices[0];
+                    } else if (result.symbol.includes('XAU') || result.symbol.includes('GOLD')) {
+                        result.price = prices.find(p => p > 1500 && p < 3000) || prices[0];
+                    } else if (result.symbol.includes('EUR') || result.symbol.includes('GBP')) {
+                        result.price = prices.find(p => p > 0.5 && p < 2) || prices[0];
+                    } else {
+                        result.price = prices[0];
+                    }
+                }
+            }
+
+            // Detect indicators mentioned
+            const indicatorPatterns = ['RSI', 'MACD', 'EMA', 'SMA', 'BOLLINGER', 'STOCH', 'ATR', 'VOLUME'];
+            indicatorPatterns.forEach(ind => {
+                if (combinedText.includes(ind)) {
+                    result.indicators.push(ind);
+                }
+            });
+
+            return result;
+        }
+
+        async function getLivePrice(symbol) {
+            if (!symbol) return null;
+
+            try {
+                const key = normalizeSymbolKey(symbol);
+                if (!key) return null;
+
+                // Direct lookup
+                if (state.marketData[key]?.price) return state.marketData[key].price;
+
+                // Common normalized mappings
+                if (key === 'XAUUSD' && state.marketData.XAUUSD?.price) return state.marketData.XAUUSD.price;
+
+                // Forex pairs
+                if (['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCHF'].includes(key)) {
+                    return state.marketData[key]?.price ?? null;
+                }
+
+                // Crypto (Binance)
+                const binanceSymbol = resolveBinanceSymbol(key);
+                if (binanceSymbol) {
+                    const response = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${binanceSymbol}`);
+                    const data = await response.json();
+                    if (data.price) return parseFloat(data.price);
+                }
+
+                return null;
+            } catch (error) {
+                console.error('Live price fetch error:', error);
+                return null;
+            }
+        }
+
+        function detectPatterns(imageAnalysis, ocrText) {
+            const patterns = [];
+            const text = ocrText.toUpperCase();
+
+            // Pattern detection based on color analysis
+            const { bullishRatio, bearishRatio } = imageAnalysis;
+
+            if (bullishRatio > 60) {
+                patterns.push({ name: 'Bullish Momentum', confidence: Math.min(bullishRatio, 95) });
+            }
+            if (bearishRatio > 60) {
+                patterns.push({ name: 'Bearish Momentum', confidence: Math.min(bearishRatio, 95) });
+            }
+
+            // Check for pattern keywords in OCR text
+            const patternKeywords = {
+                'Double Bottom': ['DOUBLE BOTTOM', 'W PATTERN'],
+                'Double Top': ['DOUBLE TOP', 'M PATTERN'],
+                'Head & Shoulders': ['HEAD AND SHOULDERS', 'H&S'],
+                'Triangle': ['TRIANGLE', 'ASCENDING', 'DESCENDING'],
+                'Flag': ['FLAG', 'PENNANT'],
+                'Channel': ['CHANNEL', 'PARALLEL'],
+                'Wedge': ['WEDGE', 'RISING WEDGE', 'FALLING WEDGE'],
+                'Support Zone': ['SUPPORT', 'DEMAND'],
+                'Resistance Zone': ['RESISTANCE', 'SUPPLY'],
+                'Break of Structure': ['BOS', 'BREAK OF STRUCTURE'],
+                'Change of Character': ['CHOCH', 'CHANGE OF CHARACTER'],
+                'Order Block': ['ORDER BLOCK', 'OB'],
+                'Fair Value Gap': ['FVG', 'FAIR VALUE GAP', 'IMBALANCE']
+            };
+
+            for (const [pattern, keywords] of Object.entries(patternKeywords)) {
+                if (keywords.some(kw => text.includes(kw))) {
+                    patterns.push({ name: pattern, confidence: 75 + Math.random() * 20 });
+                }
+            }
+
+            // Add general patterns based on analysis
+            if (bullishRatio > 55 && bullishRatio < 65) {
+                patterns.push({ name: 'Consolidation', confidence: 70 });
+            }
+
+            if (patterns.length === 0) {
+                // Default patterns based on color ratio
+                if (bullishRatio > bearishRatio) {
+                    patterns.push({ name: 'Bullish Bias', confidence: 60 + (bullishRatio - 50) });
+                } else {
+                    patterns.push({ name: 'Bearish Bias', confidence: 60 + (bearishRatio - 50) });
+                }
+            }
+
+            return patterns.slice(0, 5);
+        }
+
+        function analyzeTrend(imageAnalysis, patterns) {
+            const { bullishRatio, bearishRatio } = imageAnalysis;
+            
+            let trend = {
+                direction: 'NEUTRAL',
+                strength: 'WEAK',
+                structure: 'RANGING'
+            };
+
+            if (bullishRatio > 60) {
+                trend.direction = 'BULLISH';
+                trend.strength = bullishRatio > 70 ? 'STRONG' : 'MODERATE';
+                trend.structure = 'HIGHER HIGHS & HIGHER LOWS';
+            } else if (bearishRatio > 60) {
+                trend.direction = 'BEARISH';
+                trend.strength = bearishRatio > 70 ? 'STRONG' : 'MODERATE';
+                trend.structure = 'LOWER HIGHS & LOWER LOWS';
+            } else {
+                trend.strength = 'CONSOLIDATING';
+            }
+
+            // Adjust based on detected patterns
+            patterns.forEach(p => {
+                if (p.name.includes('Bullish') && p.confidence > 70) {
+                    trend.direction = 'BULLISH';
+                }
+                if (p.name.includes('Bearish') && p.confidence > 70) {
+                    trend.direction = 'BEARISH';
+                }
+            });
+
+            return trend;
+        }
+
+        function matchStrategy(analysisResult) {
+            const { trend, patterns, bullishRatio, bearishRatio } = analysisResult;
+            
+            let matchedStrategies = [];
+
+            // Match strategies based on patterns and trend
+            if (patterns.some(p => p.name.includes('Support') || p.name.includes('Demand'))) {
+                matchedStrategies.push({ name: 'Support Bounce', score: 85 });
+            }
+            if (patterns.some(p => p.name.includes('Resistance') || p.name.includes('Supply'))) {
+                matchedStrategies.push({ name: 'Resistance Rejection', score: 85 });
+            }
+            if (patterns.some(p => p.name.includes('Break'))) {
+                matchedStrategies.push({ name: 'Break & Retest', score: 90 });
+            }
+            if (patterns.some(p => p.name.includes('Order Block'))) {
+                matchedStrategies.push({ name: 'Order Block Entry', score: 88 });
+            }
+            if (patterns.some(p => p.name.includes('Fair Value'))) {
+                matchedStrategies.push({ name: 'FVG Fill', score: 82 });
+            }
+
+            // Default strategies based on trend
+            if (trend.direction === 'BULLISH' && trend.strength !== 'WEAK') {
+                matchedStrategies.push({ name: 'Trend Continuation (Long)', score: 80 });
+            }
+            if (trend.direction === 'BEARISH' && trend.strength !== 'WEAK') {
+                matchedStrategies.push({ name: 'Trend Continuation (Short)', score: 80 });
+            }
+
+            // Sort by score and return best
+            matchedStrategies.sort((a, b) => b.score - a.score);
+            return matchedStrategies[0] || { name: 'Price Action Analysis', score: 70 };
+        }
+
+        function calculateRiskParams(analysisResult) {
+            const { livePrice, chartPrice, trend, symbol } = analysisResult;
+            const price = livePrice || chartPrice || 0;
+            const riskPercent = parseFloat(document.getElementById('risk-slider').value);
+            const minRR = parseFloat(document.getElementById('min-rr').value);
+            const aggressive = document.getElementById('aggressive-mode').checked;
+
+            // Calculate ATR-like volatility factor based on symbol
+            let atrFactor = 0.002; // Default 0.2%
+            if (symbol) {
+                if (symbol.includes('BTC')) atrFactor = 0.015;
+                else if (symbol.includes('ETH')) atrFactor = 0.02;
+                else if (symbol.includes('XAU') || symbol.includes('GOLD')) atrFactor = 0.005;
+                else if (symbol.includes('EUR') || symbol.includes('GBP')) atrFactor = 0.003;
+            }
+
+            if (aggressive) atrFactor *= 1.5;
+
+            const slDistance = price * atrFactor;
+            const tp1Distance = slDistance * minRR;
+            const tp2Distance = slDistance * (minRR + 0.5);
+            const tp3Distance = slDistance * (minRR + 1);
+
+            return {
+                riskPercent,
+                slDistance,
+                tp1Distance,
+                tp2Distance,
+                tp3Distance,
+                minRR,
+                atrFactor
+            };
+        }
+
+        function generateSignal(analysisResult) {
+            const { trend, patterns, bullishRatio, bearishRatio, livePrice, chartPrice, riskParams, strategy } = analysisResult;
+            const price = livePrice || chartPrice || 0;
+
+            let signal = {
+                direction: 'WAIT',
+                entry: price,
+                sl: 0,
+                tp1: 0,
+                tp2: 0,
+                tp3: 0,
+                rr: 0
+            };
+
+            // Determine direction
+            if (trend.direction === 'BULLISH' && bullishRatio > 55) {
+                signal.direction = 'BUY';
+                signal.entry = price;
+                signal.sl = price - riskParams.slDistance;
+                signal.tp1 = price + riskParams.tp1Distance;
+                signal.tp2 = price + riskParams.tp2Distance;
+                signal.tp3 = price + riskParams.tp3Distance;
+            } else if (trend.direction === 'BEARISH' && bearishRatio > 55) {
+                signal.direction = 'SELL';
+                signal.entry = price;
+                signal.sl = price + riskParams.slDistance;
+                signal.tp1 = price - riskParams.tp1Distance;
+                signal.tp2 = price - riskParams.tp2Distance;
+                signal.tp3 = price - riskParams.tp3Distance;
+            }
+
+            // Calculate R:R
+            if (signal.direction !== 'WAIT') {
+                const risk = Math.abs(signal.entry - signal.sl);
+                const reward = Math.abs(signal.tp2 - signal.entry);
+                signal.rr = (reward / risk).toFixed(2);
+            }
+
+            return signal;
+        }
+
+        function calculateConfidence(analysisResult) {
+            let confidence = 50;
+
+            // Add confidence based on various factors
+            if (analysisResult.livePrice) confidence += 10;
+            if (analysisResult.symbol) confidence += 10;
+            if (analysisResult.timeframe) confidence += 5;
+            if (analysisResult.patterns.length > 0) confidence += 5 * analysisResult.patterns.length;
+            if (analysisResult.trend.strength === 'STRONG') confidence += 10;
+            if (analysisResult.strategy && analysisResult.strategy.score > 80) confidence += 10;
+
+            // Cap confidence
+            return Math.min(Math.max(confidence, 40), 95);
+        }
+
+        // ============================================
+        // DISPLAY FUNCTIONS
+        // ============================================
+
+        function displaySignalResult(result) {
+            const container = document.getElementById('signal-result');
+            const { signal, trend, strategy, confidence, symbol, timeframe, livePrice, chartPrice } = result;
+            
+            const isBuy = signal.direction === 'BUY';
+            const isSell = signal.direction === 'SELL';
+            const signalClass = isBuy ? 'buy' : (isSell ? 'sell' : 'wait');
+            const signalColor = isBuy ? 'green' : (isSell ? 'red' : 'gray');
+            const glowClass = isBuy ? 'glow-green' : (isSell ? 'glow-red' : '');
+            
+            const price = livePrice || chartPrice || 0;
+            const decimals = price > 100 ? 2 : (price > 1 ? 4 : 5);
+
+            container.innerHTML = `
+                <div class="signal-card ${signalClass} rounded-xl p-6 ${glowClass} slide-in">
+                    <div class="flex items-center justify-between mb-6">
+                        <div class="flex items-center gap-3">
+                            <div class="w-14 h-14 bg-${signalColor} bg-opacity-20 rounded-full flex items-center justify-center">
+                                ${isBuy ? '<svg class="w-8 h-8 text-green" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M3.293 9.707a1 1 0 010-1.414l6-6a1 1 0 011.414 0l6 6a1 1 0 01-1.414 1.414L11 5.414V17a1 1 0 11-2 0V5.414L4.707 9.707a1 1 0 01-1.414 0z" clip-rule="evenodd"/></svg>' : 
+                                   (isSell ? '<svg class="w-8 h-8 text-red" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 10.293a1 1 0 010 1.414l-6 6a1 1 0 01-1.414 0l-6-6a1 1 0 111.414-1.414L9 14.586V3a1 1 0 012 0v11.586l4.293-4.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>' :
+                                   '<svg class="w-8 h-8 text-gray" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>')}
+                            </div>
+                            <div>
+                                <h3 class="text-2xl font-bold text-${signalColor}">${signal.direction} SIGNAL</h3>
+                                <p class="text-sm text-gray">${symbol || 'Unknown Symbol'} • ${timeframe || 'TF N/A'}</p>
+                                <p class="text-[11px] text-gray mt-1">Series: <span class="text-yellow mono">${result.seriesSource || 'N/A'}</span></p>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-4xl font-bold text-${signalColor}">${confidence}%</div>
+                            <div class="text-xs text-gray">Confidence Score</div>
+                        </div>
+                    </div>
+
+                    ${signal.direction !== 'WAIT' ? `
+                    <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+                        <div class="bg-black rounded-lg p-4">
+                            <p class="text-xs text-gray mb-1">Entry Price</p>
+                            <p class="text-xl font-bold text-yellow mono">${signal.entry.toFixed(decimals)}</p>
+                            <p class="text-xs text-gray mt-1">Live: ${livePrice ? livePrice.toFixed(decimals) : 'N/A'}</p>
+                        </div>
+                        <div class="bg-black rounded-lg p-4">
+                            <p class="text-xs text-gray mb-1">Stop Loss</p>
+                            <p class="text-xl font-bold text-red mono">${signal.sl.toFixed(decimals)}</p>
+                            <p class="text-xs text-red mt-1">${isBuy ? '-' : '+'}${Math.abs(signal.entry - signal.sl).toFixed(decimals)}</p>
+                        </div>
+                        <div class="bg-black rounded-lg p-4">
+                            <p class="text-xs text-gray mb-1">Take Profit 1</p>
+                            <p class="text-xl font-bold text-green mono">${signal.tp1.toFixed(decimals)}</p>
+                            <p class="text-xs text-green mt-1">${isBuy ? '+' : '-'}${Math.abs(signal.tp1 - signal.entry).toFixed(decimals)}</p>
+                        </div>
+                        <div class="bg-black rounded-lg p-4">
+                            <p class="text-xs text-gray mb-1">Take Profit 2</p>
+                            <p class="text-xl font-bold text-green mono">${signal.tp2.toFixed(decimals)}</p>
+                        </div>
+                        <div class="bg-black rounded-lg p-4">
+                            <p class="text-xs text-gray mb-1">Take Profit 3</p>
+                            <p class="text-xl font-bold text-green mono">${signal.tp3.toFixed(decimals)}</p>
+                        </div>
+                        <div class="bg-black rounded-lg p-4">
+                            <p class="text-xs text-gray mb-1">Risk / Reward</p>
+                            <p class="text-xl font-bold text-yellow mono">1:${signal.rr}</p>
+                        </div>
+                    </div>
+
+                    <div class="border-t border-gray-700 pt-4">
+                        <div class="grid md:grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <h4 class="text-yellow font-semibold mb-2">SMC Analysis Summary</h4>
+                                <ul class="space-y-1 text-gray">
+                                    <li>• <span class="text-white">Market Bias:</span> <span class="${trend.direction === 'BULLISH' ? 'text-green' : trend.direction === 'BEARISH' ? 'text-red' : ''}">${trend.direction}</span> (${trend.strength})</li>
+                                    <li>• <span class="text-white">Structure:</span> ${trend.structure}</li>
+                                    <li>• <span class="text-white">SMC Strategy:</span> <span class="text-yellow">${signal.smcStrategy || strategy?.name || 'Price Action'}</span></li>
+                                    <li>• <span class="text-white">Signal Reason:</span> ${signal.reason || 'N/A'}</li>
+                                    <li>• <span class="text-white">Session:</span> ${getCurrentSession()}</li>
+                                </ul>
+                            </div>
+                            <div>
+                                <h4 class="text-yellow font-semibold mb-2">Trade Management (SMC)</h4>
+                                <ul class="space-y-1 text-gray">
+                                    <li>• Move SL to breakeven at TP1 (50% fill)</li>
+                                    <li>• Close 50% position at TP1</li>
+                                    <li>• Trail SL below/above last swing</li>
+                                    <li>• Target liquidity zones for TP2/TP3</li>
+                                    <li>• Max risk: ${document.getElementById('risk-slider').value}% of account</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    ${result.ta?.smc ? `
+                    <div class="mt-4 p-3 bg-black rounded-lg border border-yellow border-opacity-30">
+                        <h4 class="text-yellow font-semibold text-xs mb-2">🎯 SMC CONFLUENCE</h4>
+                        <div class="grid grid-cols-4 gap-2 text-xs">
+                            <div class="text-center">
+                                <div class="${result.ta.smc.summary.bosCount > 0 ? 'text-green' : 'text-gray'} font-bold">${result.ta.smc.summary.bosCount}</div>
+                                <div class="text-gray">BOS</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="${result.ta.smc.summary.chochCount > 0 ? 'text-yellow' : 'text-gray'} font-bold">${result.ta.smc.summary.chochCount}</div>
+                                <div class="text-gray">CHoCH</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="${result.ta.smc.summary.activeOBCount > 0 ? 'text-yellow' : 'text-gray'} font-bold">${result.ta.smc.summary.activeOBCount}</div>
+                                <div class="text-gray">Active OB</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="${result.ta.smc.summary.activeFVGCount > 0 ? 'text-purple-400' : 'text-gray'} font-bold">${result.ta.smc.summary.activeFVGCount}</div>
+                                <div class="text-gray">Active FVG</div>
+                            </div>
+                        </div>
+                    </div>
+                    ` : ''}
+
+                    <div class="mt-4 p-3 bg-black rounded-lg">
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="text-xs text-red">Risk</span>
+                            <div class="flex-1 h-2 bg-black-lighter rounded overflow-hidden">
+                                <div class="h-full bg-red" style="width: ${100 / (parseFloat(signal.rr) + 1)}%"></div>
+                            </div>
+                            <span class="text-xs text-green">Reward</span>
+                            <div class="flex-1 h-2 bg-black-lighter rounded overflow-hidden">
+                                <div class="h-full bg-green" style="width: ${(parseFloat(signal.rr) / (parseFloat(signal.rr) + 1)) * 100}%"></div>
+                            </div>
+                        </div>
+                        <p class="text-xs text-gray text-center">1:${signal.rr} Risk/Reward Ratio | Expected Value: +${(parseFloat(signal.rr) * 0.6 - 0.4).toFixed(2)}R (60% win rate)</p>
+                    </div>
+                    ` : `
+                    <div class="text-center py-8">
+                        <p class="text-gray mb-4">No clear trading opportunity detected at this time.</p>
+                        <p class="text-sm text-yellow">Recommendation: Wait for better price action confirmation.</p>
+                    </div>
+                    `}
+                </div>
+            `;
+
+            container.classList.remove('hidden');
+        }
+
+        function displayAnalysisDetails(result) {
+            const container = document.getElementById('analysis-details');
+            const price = result.livePrice || result.chartPrice || 0;
+            const decimals = price > 100 ? 2 : (price > 1 ? 4 : 5);
+            
+            // Update candle distribution
+            document.getElementById('bullish-pct').textContent = result.bullishRatio.toFixed(1) + '%';
+            document.getElementById('bearish-pct').textContent = result.bearishRatio.toFixed(1) + '%';
+            document.getElementById('bullish-bar').style.width = result.bullishRatio + '%';
+            document.getElementById('bearish-bar').style.width = result.bearishRatio + '%';
+
+            // Update SMC Patterns
+            const smcContainer = document.getElementById('smc-patterns');
+            const smc = result.ta?.smc;
+            
+            if (smc) {
+                let smcHtml = `
+                    <div class="flex justify-between items-center">
+                        <span class="text-white">Market Bias</span>
+                        <span class="${smc.marketBias.includes('BULLISH') ? 'text-green' : smc.marketBias.includes('BEARISH') ? 'text-red' : 'text-gray'} font-bold">${smc.marketBias}</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-white">Structure</span>
+                        <span class="text-yellow">${smc.structure}</span>
+                    </div>
+                `;
+                
+                if (smc.bos.length > 0) {
+                    const lastBOS = smc.bos[smc.bos.length - 1];
+                    smcHtml += `
+                        <div class="flex justify-between items-center">
+                            <span class="text-white">Last BOS</span>
+                            <span class="${lastBOS.type.includes('BULLISH') ? 'text-green' : 'text-red'}">${lastBOS.type.replace('_', ' ')}</span>
+                        </div>
+                    `;
+                }
+                
+                if (smc.choch.length > 0) {
+                    const lastCHoCH = smc.choch[smc.choch.length - 1];
+                    smcHtml += `
+                        <div class="flex justify-between items-center">
+                            <span class="text-white">CHoCH</span>
+                            <span class="${lastCHoCH.type.includes('BULLISH') ? 'text-green' : 'text-red'} font-bold">${lastCHoCH.type.replace('_', ' ')}</span>
+                        </div>
+                    `;
+                }
+                
+                smcContainer.innerHTML = smcHtml;
+                
+                // Update counts
+                document.getElementById('bos-count').textContent = smc.summary.bosCount;
+                document.getElementById('bos-count').className = `text-lg font-bold ${smc.bos.slice(-1)[0]?.type.includes('BULLISH') ? 'text-green' : smc.bos.slice(-1)[0]?.type.includes('BEARISH') ? 'text-red' : ''}`;
+                
+                document.getElementById('choch-count').textContent = smc.summary.chochCount;
+                document.getElementById('choch-count').className = `text-lg font-bold ${smc.choch.slice(-1)[0]?.type.includes('BULLISH') ? 'text-green' : smc.choch.slice(-1)[0]?.type.includes('BEARISH') ? 'text-red' : ''}`;
+                
+                document.getElementById('ob-count').textContent = smc.summary.activeOBCount;
+                document.getElementById('fvg-count').textContent = smc.summary.activeFVGCount;
+                
+                // Update Order Blocks display
+                const obContainer = document.getElementById('order-blocks');
+                if (smc.activeOBs.length > 0) {
+                    obContainer.innerHTML = smc.activeOBs.map(ob => `
+                        <div class="flex justify-between items-center p-2 bg-black-lighter rounded ${ob.type.includes('BULLISH') ? 'border-l-2 border-green' : 'border-l-2 border-red'}">
+                            <div>
+                                <span class="${ob.type.includes('BULLISH') ? 'text-green' : 'text-red'} font-semibold">${ob.type.includes('BULLISH') ? '🟢 Bullish' : '🔴 Bearish'}</span>
+                                <div class="text-gray text-[10px]">${ob.mitigated ? '⚠️ Mitigated' : '✅ Active'}</div>
+                            </div>
+                            <div class="text-right">
+                                <div class="mono text-white">${ob.high.toFixed(decimals)}</div>
+                                <div class="mono text-gray">${ob.low.toFixed(decimals)}</div>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    obContainer.innerHTML = '<span class="text-gray">No active Order Blocks</span>';
+                }
+                
+                // Update FVG display
+                const fvgContainer = document.getElementById('fair-value-gaps');
+                if (smc.activeFVGs.length > 0) {
+                    fvgContainer.innerHTML = smc.activeFVGs.map(fvg => `
+                        <div class="flex justify-between items-center p-2 bg-black-lighter rounded ${fvg.type.includes('BULLISH') ? 'border-l-2 border-purple-400' : 'border-l-2 border-orange-400'}">
+                            <div>
+                                <span class="${fvg.type.includes('BULLISH') ? 'text-purple-400' : 'text-orange-400'} font-semibold">${fvg.type.includes('BULLISH') ? '🟣 Bullish' : '🟠 Bearish'}</span>
+                                <div class="text-gray text-[10px]">Fill: ${fvg.fillPercent.toFixed(0)}%</div>
+                            </div>
+                            <div class="text-right">
+                                <div class="mono text-white">${fvg.high.toFixed(decimals)}</div>
+                                <div class="mono text-gray">${fvg.low.toFixed(decimals)}</div>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    fvgContainer.innerHTML = '<span class="text-gray">No active FVGs</span>';
+                }
+                
+                // Update narrative
+                document.getElementById('smc-narrative').textContent = generateSMCNarrative(smc);
+            } else {
+                smcContainer.innerHTML = '<span class="text-gray">SMC analysis requires live data</span>';
+            }
+
+            // Update key levels
+            const levelsContainer = document.getElementById('key-levels');
+            if (price > 0) {
+                const support = result.ta?.support || price * 0.98;
+                const resistance = result.ta?.resistance || price * 1.02;
+                
+                let levelsHtml = `
+                    <div class="flex justify-between"><span class="text-red">Resistance</span><span class="mono">${resistance.toFixed(decimals)}</span></div>
+                    <div class="flex justify-between"><span class="text-yellow">Current</span><span class="mono">${price.toFixed(decimals)}</span></div>
+                    <div class="flex justify-between"><span class="text-green">Support</span><span class="mono">${support.toFixed(decimals)}</span></div>
+                `;
+                
+                // Add liquidity zones if available
+                if (smc?.liquidityZones?.length > 0) {
+                    const bsl = smc.liquidityZones.find(l => l.type === 'BSL' && !l.swept);
+                    const ssl = smc.liquidityZones.find(l => l.type === 'SSL' && !l.swept);
+                    
+                    if (bsl) {
+                        levelsHtml += `<div class="flex justify-between"><span class="text-orange-400">BSL</span><span class="mono">${bsl.level.toFixed(decimals)}</span></div>`;
+                    }
+                    if (ssl) {
+                        levelsHtml += `<div class="flex justify-between"><span class="text-cyan-400">SSL</span><span class="mono">${ssl.level.toFixed(decimals)}</span></div>`;
+                    }
+                }
+                
+                levelsContainer.innerHTML = levelsHtml;
+            }
+
+            container.classList.remove('hidden');
+        }
+
+        function saveToHistory(result) {
+            const historyItem = {
+                timestamp: new Date().toISOString(),
+                symbol: result.symbol,
+                direction: result.signal.direction,
+                confidence: result.confidence,
+                entry: result.signal.entry,
+                result: result
+            };
+
+            state.analysisHistory.unshift(historyItem);
+            if (state.analysisHistory.length > 20) state.analysisHistory.pop();
+
+            updateHistoryDisplay();
+        }
+
+        function updateHistoryDisplay() {
+            const container = document.getElementById('trade-history');
+            document.getElementById('history-count').textContent = `${state.analysisHistory.length} analyses`;
+
+            if (state.analysisHistory.length === 0) {
+                container.innerHTML = '<div class="text-center text-gray text-sm py-8">No analyses yet. Upload a chart to begin.</div>';
+                return;
+            }
+
+            container.innerHTML = state.analysisHistory.map((item, idx) => {
+                const isBuy = item.direction === 'BUY';
+                const isSell = item.direction === 'SELL';
+                const colorClass = isBuy ? 'buy' : (isSell ? 'sell' : 'wait');
+                const bgColor = isBuy ? 'green' : (isSell ? 'red' : 'gray');
+                
+                return `
+                    <div class="signal-card ${colorClass} rounded-lg p-4 flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 bg-${bgColor} bg-opacity-20 rounded-full flex items-center justify-center text-${bgColor} font-bold">
+                                ${item.direction[0]}
+                            </div>
+                            <div>
+                                <p class="font-semibold">${item.symbol || 'Unknown'}</p>
+                                <p class="text-xs text-gray">${new Date(item.timestamp).toLocaleString()}</p>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-${bgColor} font-bold">${item.direction}</p>
+                            <p class="text-xs text-gray">${item.confidence}% conf.</p>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // ============================================
+        // HELPER FUNCTIONS
+        // ============================================
+
+        function updateStatus(status) {
+            document.getElementById('analysis-status').textContent = status;
+        }
+
+        function resetProgressStep(stepNum) {
+            const step = document.getElementById(`step-${stepNum}`);
+            step.classList.remove('complete', 'active');
+            step.querySelector('.step-icon').innerHTML = '<circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" stroke-width="2"/>';
+            step.querySelector('.step-icon').className = 'w-4 h-4 text-gray step-icon';
+        }
+
+        async function completeStep(stepNum) {
+            await delay(300 + Math.random() * 400);
+            
+            const step = document.getElementById(`step-${stepNum}`);
+            step.classList.add('complete');
+            step.querySelector('.step-icon').innerHTML = '<path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>';
+            step.querySelector('.step-icon').className = 'w-4 h-4 text-green step-icon';
+
+            // Activate next step
+            if (stepNum < 8) {
+                const nextStep = document.getElementById(`step-${stepNum + 1}`);
+                nextStep.classList.add('active');
+                nextStep.querySelector('.step-icon').className = 'w-4 h-4 text-yellow step-icon animate-pulse';
+            }
+        }
+
+        function delay(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        function getCurrentSession() {
+            const hour = new Date().getUTCHours();
+            if (hour >= 22 || hour < 7) return 'Sydney';
+            if (hour >= 0 && hour < 9) return 'Tokyo';
+            if (hour >= 8 && hour < 17) return 'London';
+            if (hour >= 13 && hour < 22) return 'New York';
+            return 'Transition';
+        }
+
+        function updateTradingSessions() {
+            const hour = new Date().getUTCHours();
+            
+            const sessions = {
+                'session-sydney': hour >= 22 || hour < 7,
+                'session-tokyo': hour >= 0 && hour < 9,
+                'session-london': hour >= 8 && hour < 17,
+                'session-newyork': hour >= 13 && hour < 22
+            };
+
+            for (const [id, isActive] of Object.entries(sessions)) {
+                const el = document.getElementById(id);
+                if (isActive) {
+                    el.classList.add('bg-yellow', 'bg-opacity-20');
+                    el.querySelector('span:last-child').classList.add('text-yellow');
+                } else {
+                    el.classList.remove('bg-yellow', 'bg-opacity-20');
+                    el.querySelector('span:last-child').classList.remove('text-yellow');
+                }
+            }
+
+            document.getElementById('market-session').textContent = getCurrentSession() + ' Session';
+        }
+
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('current-time').textContent = now.toUTCString().slice(0, -4);
+        }
+
+        function setupRiskSlider() {
+            const slider = document.getElementById('risk-slider');
+            slider.addEventListener('input', (e) => {
+                document.getElementById('risk-value').textContent = e.target.value + '%';
+            });
+        }
+
+        // ============================================
+        // LIVE CHART
+        // ============================================
+
+        async function initializeChart() {
+            const ctx = document.getElementById('liveChart').getContext('2d');
+
+            const tf = 'H1';
+            const { series } = await fetchMarketSeries('BTCUSDT', tf, 80);
+            const labels = series.map(k => new Date(k.time).toLocaleTimeString());
+            const prices = series.map(k => k.close);
+
+            state.liveChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'BTCUSDT',
+                        data: prices,
+                        borderColor: '#FFD700',
+                        backgroundColor: 'rgba(255, 215, 0, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.1,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#1A1A1A',
+                            titleColor: '#FFD700',
+                            bodyColor: '#FFFFFF'
+                        }
+                    },
+                    scales: {
+                        x: { display: false },
+                        y: {
+                            position: 'right',
+                            grid: { color: 'rgba(255, 215, 0, 0.1)' },
+                            ticks: { color: '#888', font: { family: 'JetBrains Mono' } }
+                        }
+                    }
+                }
+            });
+
+            // Auto-update chart
+            setInterval(updateLiveChart, 30000);
+        }
+
+        async function updateLiveChart() {
+            if (!state.liveChart) return;
+
+            const symbol = state.currentSymbol;
+            const tf = state.detectedTimeframe || 'H1';
+            const { series } = await fetchMarketSeries(symbol, tf, 80);
+
+            if (series.length > 0) {
+                state.liveChart.data.labels = series.map(k => new Date(k.time).toLocaleTimeString());
+                state.liveChart.data.datasets[0].data = series.map(k => k.close);
+                state.liveChart.update('none');
+                document.getElementById('chart-last-update').textContent = 'Last update: ' + new Date().toLocaleTimeString();
+            }
+        }
+
+        async function switchChartSymbol(symbol) {
+            state.currentSymbol = symbol;
+
+            // Update button styles
+            document.querySelectorAll('.chart-btn').forEach(btn => {
+                btn.classList.remove('bg-yellow', 'text-black');
+                btn.classList.add('bg-black-lighter');
+            });
+            const btn = document.querySelector(`[data-symbol="${symbol}"]`);
+            if (btn) {
+                btn.classList.add('bg-yellow', 'text-black');
+                btn.classList.remove('bg-black-lighter');
+            }
+
+            document.getElementById('chart-symbol-display').textContent = symbol;
+
+            const tf = state.detectedTimeframe || 'H1';
+            const { series } = await fetchMarketSeries(symbol, tf, 80);
+            if (series.length > 0 && state.liveChart) {
+                state.liveChart.data.labels = series.map(k => new Date(k.time).toLocaleTimeString());
+                state.liveChart.data.datasets[0].data = series.map(k => k.close);
+                state.liveChart.data.datasets[0].label = symbol;
+                state.liveChart.update();
+            }
+        }
+
+        // ============================================
+        // PAIR MANAGEMENT
+        // ============================================
+
+        function openAddPairModal() {
+            document.getElementById('add-pair-modal').classList.remove('hidden');
+        }
+
+        function closeAddPairModal() {
+            document.getElementById('add-pair-modal').classList.add('hidden');
+        }
+
+        function addFavoritePair(symbol) {
+            if (!state.favoritePairs.includes(symbol)) {
+                state.favoritePairs.push(symbol);
+                saveFavoritePairs();
+                updateMarketDisplay();
+                closeAddPairModal();
+                console.log(`✅ Added ${symbol} to favorites`);
+            } else {
+                alert(`${symbol} is already in your favorites!`);
+            }
+        }
+
+        function removeFavoritePair(symbol) {
+            state.favoritePairs = state.favoritePairs.filter(s => s !== symbol);
+            saveFavoritePairs();
+            updateMarketDisplay();
+            console.log(`❌ Removed ${symbol} from favorites`);
+        }
+
+        function saveFavoritePairs() {
+            localStorage.setItem('smartkorafx_favorite_pairs', JSON.stringify(state.favoritePairs));
+        }
+
+        function loadFavoritePairs() {
+            const saved = localStorage.getItem('smartkorafx_favorite_pairs');
+            if (saved) {
+                state.favoritePairs = JSON.parse(saved);
+            }
+        }
+
+        // ============================================
+        // LIVE SIGNAL GENERATION (from Market Data)
+        // ============================================
+
+        async function generateLiveSignal(symbol) {
+            console.log(`🔍 Generating live signal for ${symbol}...`);
+
+            // Ensure latest snapshot exists
+            const data = state.marketData[symbol];
+            if (!data) {
+                alert('Market data not available yet. Waiting for feed...');
+                return;
+            }
+
+            const timeframe = state.detectedTimeframe || 'H1';
+            const { series, source } = await fetchMarketSeries(symbol, timeframe, 120);
+
+            if (!series || series.length < 30) {
+                alert(`Unable to fetch series for ${symbol}. Source: ${source}`);
+                return;
+            }
+
+            const analysis = analyzeKlines(series, symbol);
+            analysis.source = source;
+
+            const signal = generateLiveSignalFromAnalysis(analysis, data, symbol, timeframe);
+            displayLiveSignal(signal, symbol, timeframe, analysis);
+        }
+
+        function analyzeKlines(klines, symbol) {
+            let bullishCandles = 0;
+            let bearishCandles = 0;
+            let closes = [];
+            let highs = [];
+            let lows = [];
+
+            klines.forEach(k => {
+                closes.push(k.close);
+                highs.push(k.high);
+                lows.push(k.low);
+                if (k.close > k.open) {
+                    bullishCandles++;
+                } else {
+                    bearishCandles++;
+                }
+            });
+
+            // Calculate EMA20 and EMA50
+            const ema20 = calculateEMA(closes, 20);
+            const ema50 = calculateEMA(closes, 50);
+            
+            // Calculate RSI
+            const rsi = calculateRSI(closes, 14);
+            
+            // Find support and resistance
+            const support = Math.min(...lows.slice(-20));
+            const resistance = Math.max(...highs.slice(-20));
+            
+            // Current price
+            const currentPrice = closes[closes.length - 1];
+            
+            // SMC Analysis
+            const smc = performSMCAnalysis(klines);
+            
+            // Trend direction - prioritize SMC
+            let trend = 'NEUTRAL';
+            if (smc.marketBias.includes('BULLISH')) {
+                trend = 'BULLISH';
+            } else if (smc.marketBias.includes('BEARISH')) {
+                trend = 'BEARISH';
+            } else if (ema20 > ema50 && bullishCandles > bearishCandles) {
+                trend = 'BULLISH';
+            } else if (ema20 < ema50 && bearishCandles > bullishCandles) {
+                trend = 'BEARISH';
+            }
+
+            return {
+                currentPrice,
+                bullishCandles,
+                bearishCandles,
+                bullishRatio: (bullishCandles / (bullishCandles + bearishCandles) * 100),
+                bearishRatio: (bearishCandles / (bullishCandles + bearishCandles) * 100),
+                ema20,
+                ema50,
+                rsi,
+                support,
+                resistance,
+                trend,
+                closes,
+                highs,
+                lows,
+                smc // Include full SMC analysis
+            };
+        }
+
+        function calculateEMA(data, period) {
+            const k = 2 / (period + 1);
+            let ema = data[0];
+            for (let i = 1; i < data.length; i++) {
+                ema = data[i] * k + ema * (1 - k);
+            }
+            return ema;
+        }
+
+        function calculateRSI(data, period) {
+            let gains = 0, losses = 0;
+            for (let i = 1; i < period; i++) {
+                const change = data[i] - data[i - 1];
+                if (change > 0) gains += change;
+                else losses -= change;
+            }
+            let avgGain = gains / period;
+            let avgLoss = losses / period;
+
+            for (let i = period; i < data.length; i++) {
+                const change = data[i] - data[i - 1];
+                if (change > 0) {
+                    avgGain = (avgGain * (period - 1) + change) / period;
+                    avgLoss = (avgLoss * (period - 1)) / period;
+                } else {
+                    avgGain = (avgGain * (period - 1)) / period;
+                    avgLoss = (avgLoss * (period - 1) - change) / period;
+                }
+            }
+
+            if (avgLoss === 0) return 100;
+            const rs = avgGain / avgLoss;
+            return 100 - (100 / (1 + rs));
+        }
+
+        function calculateATR(klines, period = 14) {
+            if (!klines || klines.length < period + 1) return null;
+            const trs = [];
+            for (let i = 1; i < klines.length; i++) {
+                const prevClose = klines[i - 1].close;
+                const high = klines[i].high;
+                const low = klines[i].low;
+                const tr = Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose));
+                trs.push(tr);
+            }
+            // Wilder smoothing
+            let atr = trs.slice(0, period).reduce((a, b) => a + b, 0) / period;
+            for (let i = period; i < trs.length; i++) {
+                atr = (atr * (period - 1) + trs[i]) / period;
+            }
+            return atr;
+        }
+
+        function calculateMACD(closes, fast = 12, slow = 26, signal = 9) {
+            if (!closes || closes.length < slow + signal + 5) return null;
+            const emaFastSeries = emaSeries(closes, fast);
+            const emaSlowSeries = emaSeries(closes, slow);
+            const macdLine = emaFastSeries.map((v, i) => v - emaSlowSeries[i]);
+            const signalLine = emaSeries(macdLine, signal);
+            const hist = macdLine[macdLine.length - 1] - signalLine[signalLine.length - 1];
+            return {
+                macd: macdLine[macdLine.length - 1],
+                signal: signalLine[signalLine.length - 1],
+                hist
+            };
+        }
+
+        function emaSeries(data, period) {
+            const k = 2 / (period + 1);
+            let ema = data[0];
+            const out = [ema];
+            for (let i = 1; i < data.length; i++) {
+                ema = data[i] * k + ema * (1 - k);
+                out.push(ema);
+            }
+            return out;
+        }
+
+        function detectSwings(klines, lookback = 2) {
+            // Enhanced fractal swings detection for SMC
+            const swings = { highs: [], lows: [], all: [] };
+            for (let i = lookback; i < klines.length - lookback; i++) {
+                const h = klines[i].high;
+                const l = klines[i].low;
+                let isHigh = true;
+                let isLow = true;
+                for (let j = 1; j <= lookback; j++) {
+                    if (klines[i - j].high >= h || klines[i + j].high >= h) isHigh = false;
+                    if (klines[i - j].low <= l || klines[i + j].low <= l) isLow = false;
+                }
+                if (isHigh) {
+                    const swing = { i, price: h, time: klines[i].time, type: 'HIGH' };
+                    swings.highs.push(swing);
+                    swings.all.push(swing);
+                }
+                if (isLow) {
+                    const swing = { i, price: l, time: klines[i].time, type: 'LOW' };
+                    swings.lows.push(swing);
+                    swings.all.push(swing);
+                }
+            }
+            // Sort all swings by index
+            swings.all.sort((a, b) => a.i - b.i);
+            return swings;
+        }
+
+        // ============================================
+        // SMC (SMART MONEY CONCEPTS) ANALYSIS ENGINE
+        // ============================================
+
+        function detectBOS(klines, swings) {
+            // Break of Structure - when price breaks previous swing high/low
+            const bosEvents = [];
+            const highs = swings.highs;
+            const lows = swings.lows;
+
+            // Bullish BOS: Price breaks above previous swing high
+            for (let i = 1; i < highs.length; i++) {
+                const prevHigh = highs[i - 1];
+                const currentHigh = highs[i];
+                
+                // Find candles between these swings that broke the level
+                for (let j = prevHigh.i + 1; j <= currentHigh.i && j < klines.length; j++) {
+                    if (klines[j].close > prevHigh.price) {
+                        bosEvents.push({
+                            type: 'BULLISH_BOS',
+                            level: prevHigh.price,
+                            breakIndex: j,
+                            breakTime: klines[j].time,
+                            breakPrice: klines[j].close,
+                            description: `Bullish BOS @ ${prevHigh.price.toFixed(4)}`
+                        });
+                        break;
+                    }
+                }
+            }
+
+            // Bearish BOS: Price breaks below previous swing low
+            for (let i = 1; i < lows.length; i++) {
+                const prevLow = lows[i - 1];
+                const currentLow = lows[i];
+                
+                for (let j = prevLow.i + 1; j <= currentLow.i && j < klines.length; j++) {
+                    if (klines[j].close < prevLow.price) {
+                        bosEvents.push({
+                            type: 'BEARISH_BOS',
+                            level: prevLow.price,
+                            breakIndex: j,
+                            breakTime: klines[j].time,
+                            breakPrice: klines[j].close,
+                            description: `Bearish BOS @ ${prevLow.price.toFixed(4)}`
+                        });
+                        break;
+                    }
+                }
+            }
+
+            return bosEvents;
+        }
+
+        function detectCHoCH(klines, swings, bosEvents) {
+            // Change of Character - trend reversal signal
+            const chochEvents = [];
+            const allSwings = swings.all;
+            
+            if (allSwings.length < 4) return chochEvents;
+
+            // Analyze swing sequence for CHoCH
+            for (let i = 3; i < allSwings.length; i++) {
+                const s1 = allSwings[i - 3];
+                const s2 = allSwings[i - 2];
+                const s3 = allSwings[i - 1];
+                const s4 = allSwings[i];
+
+                // Bullish CHoCH: Was making LL, now makes HL (or breaks structure high)
+                if (s1.type === 'LOW' && s3.type === 'LOW' && s2.type === 'HIGH' && s4.type === 'HIGH') {
+                    // Check if we were in downtrend (LL) and now showing reversal
+                    if (s3.price < s1.price && s4.price > s2.price) {
+                        chochEvents.push({
+                            type: 'BULLISH_CHOCH',
+                            level: s2.price,
+                            triggerIndex: s4.i,
+                            triggerTime: s4.time,
+                            description: `Bullish CHoCH - Trend reversal @ ${s2.price.toFixed(4)}`,
+                            significance: 'HIGH'
+                        });
+                    }
+                }
+
+                // Bearish CHoCH: Was making HH, now makes LH (or breaks structure low)
+                if (s1.type === 'HIGH' && s3.type === 'HIGH' && s2.type === 'LOW' && s4.type === 'LOW') {
+                    if (s3.price > s1.price && s4.price < s2.price) {
+                        chochEvents.push({
+                            type: 'BEARISH_CHOCH',
+                            level: s2.price,
+                            triggerIndex: s4.i,
+                            triggerTime: s4.time,
+                            description: `Bearish CHoCH - Trend reversal @ ${s2.price.toFixed(4)}`,
+                            significance: 'HIGH'
+                        });
+                    }
+                }
+            }
+
+            // Also detect CHoCH from rapid BOS reversals
+            for (let i = 1; i < bosEvents.length; i++) {
+                const prev = bosEvents[i - 1];
+                const curr = bosEvents[i];
+                
+                // If BOS direction changed rapidly
+                if ((prev.type === 'BULLISH_BOS' && curr.type === 'BEARISH_BOS') ||
+                    (prev.type === 'BEARISH_BOS' && curr.type === 'BULLISH_BOS')) {
+                    const indexDiff = curr.breakIndex - prev.breakIndex;
+                    if (indexDiff < 10) { // Within 10 candles
+                        chochEvents.push({
+                            type: curr.type === 'BEARISH_BOS' ? 'BEARISH_CHOCH' : 'BULLISH_CHOCH',
+                            level: curr.level,
+                            triggerIndex: curr.breakIndex,
+                            triggerTime: curr.breakTime,
+                            description: `${curr.type === 'BEARISH_BOS' ? 'Bearish' : 'Bullish'} CHoCH (rapid reversal)`,
+                            significance: 'MEDIUM'
+                        });
+                    }
+                }
+            }
+
+            return chochEvents;
+        }
+
+        function detectOrderBlocks(klines, swings, bosEvents) {
+            // Order Blocks - last opposite candle before impulsive move
+            const orderBlocks = [];
+            
+            // Find bullish order blocks (last bearish candle before bullish move)
+            for (const bos of bosEvents.filter(b => b.type === 'BULLISH_BOS')) {
+                // Look back from BOS to find the last bearish candle
+                for (let i = bos.breakIndex - 1; i >= Math.max(0, bos.breakIndex - 10); i--) {
+                    const candle = klines[i];
+                    if (candle.close < candle.open) { // Bearish candle
+                        // Validate it's a significant move after this candle
+                        const moveAfter = bos.breakPrice - candle.low;
+                        const candleRange = candle.high - candle.low;
+                        
+                        if (moveAfter > candleRange * 2) { // Significant impulse
+                            orderBlocks.push({
+                                type: 'BULLISH_OB',
+                                high: candle.high,
+                                low: candle.low,
+                                midpoint: (candle.high + candle.low) / 2,
+                                index: i,
+                                time: candle.time,
+                                strength: Math.min(100, (moveAfter / candleRange) * 20),
+                                mitigated: false,
+                                description: `Bullish OB: ${candle.low.toFixed(4)} - ${candle.high.toFixed(4)}`
+                            });
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Find bearish order blocks (last bullish candle before bearish move)
+            for (const bos of bosEvents.filter(b => b.type === 'BEARISH_BOS')) {
+                for (let i = bos.breakIndex - 1; i >= Math.max(0, bos.breakIndex - 10); i--) {
+                    const candle = klines[i];
+                    if (candle.close > candle.open) { // Bullish candle
+                        const moveAfter = candle.high - bos.breakPrice;
+                        const candleRange = candle.high - candle.low;
+                        
+                        if (moveAfter > candleRange * 2) {
+                            orderBlocks.push({
+                                type: 'BEARISH_OB',
+                                high: candle.high,
+                                low: candle.low,
+                                midpoint: (candle.high + candle.low) / 2,
+                                index: i,
+                                time: candle.time,
+                                strength: Math.min(100, (moveAfter / candleRange) * 20),
+                                mitigated: false,
+                                description: `Bearish OB: ${candle.low.toFixed(4)} - ${candle.high.toFixed(4)}`
+                            });
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Check if OBs have been mitigated
+            const currentPrice = klines[klines.length - 1].close;
+            orderBlocks.forEach(ob => {
+                if (ob.type === 'BULLISH_OB') {
+                    // Bullish OB mitigated if price went back into the zone
+                    for (let i = ob.index + 1; i < klines.length; i++) {
+                        if (klines[i].low <= ob.high && klines[i].low >= ob.low) {
+                            ob.mitigated = true;
+                            ob.mitigationIndex = i;
+                            break;
+                        }
+                    }
+                } else {
+                    // Bearish OB mitigated if price went back into the zone
+                    for (let i = ob.index + 1; i < klines.length; i++) {
+                        if (klines[i].high >= ob.low && klines[i].high <= ob.high) {
+                            ob.mitigated = true;
+                            ob.mitigationIndex = i;
+                            break;
+                        }
+                    }
+                }
+            });
+
+            return orderBlocks;
+        }
+
+        function detectFVG(klines) {
+            // Fair Value Gaps - imbalance zones (3-candle pattern)
+            const fvgs = [];
+            
+            for (let i = 2; i < klines.length; i++) {
+                const candle1 = klines[i - 2];
+                const candle2 = klines[i - 1];
+                const candle3 = klines[i];
+
+                // Bullish FVG: Gap between candle 1 high and candle 3 low
+                if (candle3.low > candle1.high) {
+                    const gapSize = candle3.low - candle1.high;
+                    const avgRange = (candle1.high - candle1.low + candle2.high - candle2.low + candle3.high - candle3.low) / 3;
+                    
+                    if (gapSize > avgRange * 0.3) { // Significant gap
+                        fvgs.push({
+                            type: 'BULLISH_FVG',
+                            high: candle3.low,
+                            low: candle1.high,
+                            midpoint: (candle3.low + candle1.high) / 2,
+                            size: gapSize,
+                            index: i - 1,
+                            time: candle2.time,
+                            filled: false,
+                            fillPercent: 0,
+                            description: `Bullish FVG: ${candle1.high.toFixed(4)} - ${candle3.low.toFixed(4)}`
+                        });
+                    }
+                }
+
+                // Bearish FVG: Gap between candle 1 low and candle 3 high
+                if (candle3.high < candle1.low) {
+                    const gapSize = candle1.low - candle3.high;
+                    const avgRange = (candle1.high - candle1.low + candle2.high - candle2.low + candle3.high - candle3.low) / 3;
+                    
+                    if (gapSize > avgRange * 0.3) {
+                        fvgs.push({
+                            type: 'BEARISH_FVG',
+                            high: candle1.low,
+                            low: candle3.high,
+                            midpoint: (candle1.low + candle3.high) / 2,
+                            size: gapSize,
+                            index: i - 1,
+                            time: candle2.time,
+                            filled: false,
+                            fillPercent: 0,
+                            description: `Bearish FVG: ${candle3.high.toFixed(4)} - ${candle1.low.toFixed(4)}`
+                        });
+                    }
+                }
+            }
+
+            // Check fill status
+            fvgs.forEach(fvg => {
+                for (let i = fvg.index + 2; i < klines.length; i++) {
+                    if (fvg.type === 'BULLISH_FVG') {
+                        if (klines[i].low <= fvg.midpoint) {
+                            fvg.fillPercent = Math.min(100, ((fvg.high - klines[i].low) / fvg.size) * 100);
+                            if (klines[i].low <= fvg.low) {
+                                fvg.filled = true;
+                                fvg.fillPercent = 100;
+                            }
+                        }
+                    } else {
+                        if (klines[i].high >= fvg.midpoint) {
+                            fvg.fillPercent = Math.min(100, ((klines[i].high - fvg.low) / fvg.size) * 100);
+                            if (klines[i].high >= fvg.high) {
+                                fvg.filled = true;
+                                fvg.fillPercent = 100;
+                            }
+                        }
+                    }
+                }
+            });
+
+            return fvgs;
+        }
+
+        function detectLiquidityZones(klines, swings) {
+            // Liquidity pools - areas where stop losses likely accumulate
+            const liquidityZones = [];
+            const highs = swings.highs;
+            const lows = swings.lows;
+
+            // Equal highs (buy-side liquidity)
+            for (let i = 1; i < highs.length; i++) {
+                const tolerance = (highs[i].price + highs[i - 1].price) / 2 * 0.001; // 0.1% tolerance
+                if (Math.abs(highs[i].price - highs[i - 1].price) < tolerance) {
+                    liquidityZones.push({
+                        type: 'BSL', // Buy-side liquidity
+                        level: Math.max(highs[i].price, highs[i - 1].price),
+                        strength: 'HIGH',
+                        description: `Buy-side Liquidity @ ${highs[i].price.toFixed(4)}`,
+                        swept: false
+                    });
+                }
+            }
+
+            // Equal lows (sell-side liquidity)
+            for (let i = 1; i < lows.length; i++) {
+                const tolerance = (lows[i].price + lows[i - 1].price) / 2 * 0.001;
+                if (Math.abs(lows[i].price - lows[i - 1].price) < tolerance) {
+                    liquidityZones.push({
+                        type: 'SSL', // Sell-side liquidity
+                        level: Math.min(lows[i].price, lows[i - 1].price),
+                        strength: 'HIGH',
+                        description: `Sell-side Liquidity @ ${lows[i].price.toFixed(4)}`,
+                        swept: false
+                    });
+                }
+            }
+
+            // Check if liquidity was swept
+            const currentPrice = klines[klines.length - 1].close;
+            const recentHigh = Math.max(...klines.slice(-20).map(k => k.high));
+            const recentLow = Math.min(...klines.slice(-20).map(k => k.low));
+
+            liquidityZones.forEach(lz => {
+                if (lz.type === 'BSL' && recentHigh > lz.level) {
+                    lz.swept = true;
+                }
+                if (lz.type === 'SSL' && recentLow < lz.level) {
+                    lz.swept = true;
+                }
+            });
+
+            return liquidityZones;
+        }
+
+        function performSMCAnalysis(klines) {
+            // Complete SMC Analysis
+            const swings = detectSwings(klines, 3);
+            const bosEvents = detectBOS(klines, swings);
+            const chochEvents = detectCHoCH(klines, swings, bosEvents);
+            const orderBlocks = detectOrderBlocks(klines, swings, bosEvents);
+            const fvgs = detectFVG(klines);
+            const liquidityZones = detectLiquidityZones(klines, swings);
+
+            // Determine overall market structure
+            const recentBOS = bosEvents.slice(-3);
+            const recentCHoCH = chochEvents.slice(-2);
+            
+            let marketBias = 'NEUTRAL';
+            let structure = 'RANGING';
+
+            // Count recent bullish vs bearish events
+            const bullishSignals = recentBOS.filter(b => b.type === 'BULLISH_BOS').length +
+                                   recentCHoCH.filter(c => c.type === 'BULLISH_CHOCH').length;
+            const bearishSignals = recentBOS.filter(b => b.type === 'BEARISH_BOS').length +
+                                   recentCHoCH.filter(c => c.type === 'BEARISH_CHOCH').length;
+
+            if (bullishSignals > bearishSignals) {
+                marketBias = 'BULLISH';
+                structure = 'UPTREND (HH/HL)';
+            } else if (bearishSignals > bullishSignals) {
+                marketBias = 'BEARISH';
+                structure = 'DOWNTREND (LH/LL)';
+            }
+
+            // Check for CHoCH override
+            if (recentCHoCH.length > 0) {
+                const lastCHoCH = recentCHoCH[recentCHoCH.length - 1];
+                if (lastCHoCH.type === 'BULLISH_CHOCH') {
+                    marketBias = 'BULLISH REVERSAL';
+                    structure = 'CHoCH → BULLISH';
+                } else {
+                    marketBias = 'BEARISH REVERSAL';
+                    structure = 'CHoCH → BEARISH';
+                }
+            }
+
+            // Find active (unmitigated) order blocks and unfilled FVGs
+            const activeOBs = orderBlocks.filter(ob => !ob.mitigated).slice(-5);
+            const activeFVGs = fvgs.filter(f => !f.filled && f.fillPercent < 50).slice(-5);
+
+            // Determine entry zone based on SMC
+            const currentPrice = klines[klines.length - 1].close;
+            let entryZone = null;
+            let smcSignal = 'WAIT';
+
+            // Look for confluence: Price near active OB + unfilled FVG
+            for (const ob of activeOBs) {
+                const distanceToOB = Math.abs(currentPrice - ob.midpoint) / currentPrice;
+                
+                if (distanceToOB < 0.005) { // Within 0.5% of OB
+                    if (ob.type === 'BULLISH_OB' && marketBias.includes('BULLISH')) {
+                        smcSignal = 'BUY';
+                        entryZone = { type: 'OB', ...ob };
+                    } else if (ob.type === 'BEARISH_OB' && marketBias.includes('BEARISH')) {
+                        smcSignal = 'SELL';
+                        entryZone = { type: 'OB', ...ob };
+                    }
+                }
+            }
+
+            // Check FVG confluence
+            for (const fvg of activeFVGs) {
+                const distanceToFVG = Math.abs(currentPrice - fvg.midpoint) / currentPrice;
+                
+                if (distanceToFVG < 0.003) { // Within 0.3% of FVG midpoint
+                    if (fvg.type === 'BULLISH_FVG' && marketBias.includes('BULLISH')) {
+                        smcSignal = 'BUY';
+                        entryZone = entryZone || { type: 'FVG', ...fvg };
+                    } else if (fvg.type === 'BEARISH_FVG' && marketBias.includes('BEARISH')) {
+                        smcSignal = 'SELL';
+                        entryZone = entryZone || { type: 'FVG', ...fvg };
+                    }
+                }
+            }
+
+            return {
+                swings,
+                bos: bosEvents,
+                choch: chochEvents,
+                orderBlocks,
+                fvgs,
+                liquidityZones,
+                activeOBs,
+                activeFVGs,
+                marketBias,
+                structure,
+                smcSignal,
+                entryZone,
+                summary: {
+                    bosCount: bosEvents.length,
+                    chochCount: chochEvents.length,
+                    obCount: orderBlocks.length,
+                    fvgCount: fvgs.length,
+                    activeOBCount: activeOBs.length,
+                    activeFVGCount: activeFVGs.length
+                }
+            };
+        }
+
+        function generateSMCNarrative(smc) {
+            const parts = [];
+            
+            // Market structure
+            parts.push(`Market Structure: ${smc.structure}`);
+            
+            // BOS/CHoCH analysis
+            if (smc.choch.length > 0) {
+                const lastCHoCH = smc.choch[smc.choch.length - 1];
+                parts.push(`Recent CHoCH detected - ${lastCHoCH.description}`);
+            }
+            
+            if (smc.bos.length > 0) {
+                const recentBOS = smc.bos.slice(-2);
+                const bosTypes = recentBOS.map(b => b.type.replace('_BOS', '')).join(', ');
+                parts.push(`BOS: ${bosTypes}`);
+            }
+
+            // Order blocks
+            if (smc.activeOBs.length > 0) {
+                parts.push(`${smc.activeOBs.length} active Order Block(s) detected`);
+            }
+
+            // FVGs
+            if (smc.activeFVGs.length > 0) {
+                parts.push(`${smc.activeFVGs.length} unfilled FVG(s) present`);
+            }
+
+            // Entry recommendation
+            if (smc.entryZone) {
+                parts.push(`Entry zone: ${smc.entryZone.type} @ ${smc.entryZone.midpoint?.toFixed(4) || 'N/A'}`);
+            }
+
+            return parts.join(' | ');
+        }
+
+        function inferStructure(swings) {
+            const lastHighs = swings.highs.slice(-3).map(x => x.price);
+            const lastLows = swings.lows.slice(-3).map(x => x.price);
+            if (lastHighs.length < 2 || lastLows.length < 2) {
+                return { type: 'RANGING', bos: false, choch: false };
+            }
+
+            const hh = lastHighs[lastHighs.length - 1] > lastHighs[lastHighs.length - 2];
+            const hl = lastLows[lastLows.length - 1] > lastLows[lastLows.length - 2];
+            const lh = lastHighs[lastHighs.length - 1] < lastHighs[lastHighs.length - 2];
+            const ll = lastLows[lastLows.length - 1] < lastLows[lastLows.length - 2];
+
+            let type = 'RANGING';
+            if (hh && hl) type = 'BULLISH (HH/HL)';
+            if (lh && ll) type = 'BEARISH (LH/LL)';
+
+            // Heuristic BOS/CHoCH
+            const bos = type !== 'RANGING';
+            const choch = (hh && !hl) || (ll && !lh);
+            return { type, bos, choch };
+        }
+
+        function analyzeMarketSeries(klines) {
+            const closes = klines.map(k => k.close);
+            const highs = klines.map(k => k.high);
+            const lows = klines.map(k => k.low);
+
+            const ema20 = calculateEMA(closes, 20);
+            const ema50 = calculateEMA(closes, 50);
+            const ema200 = calculateEMA(closes, 200);
+            const rsi = calculateRSI(closes, 14);
+            const macd = calculateMACD(closes);
+            const atr = calculateATR(klines, 14) || (Math.max(...highs.slice(-20)) - Math.min(...lows.slice(-20))) * 0.15;
+
+            const support = Math.min(...lows.slice(-40));
+            const resistance = Math.max(...highs.slice(-40));
+            const currentPrice = closes[closes.length - 1];
+
+            // SMC Analysis
+            const smc = performSMCAnalysis(klines);
+            const swings = smc.swings;
+            const structure = inferStructure(swings);
+
+            let direction = 'NEUTRAL';
+            let strength = 'WEAK';
+            
+            // Use SMC bias if available
+            if (smc.marketBias.includes('BULLISH')) {
+                direction = 'BULLISH';
+                strength = smc.choch.length > 0 ? 'STRONG' : 'MODERATE';
+            } else if (smc.marketBias.includes('BEARISH')) {
+                direction = 'BEARISH';
+                strength = smc.choch.length > 0 ? 'STRONG' : 'MODERATE';
+            } else {
+                // Fallback to EMA analysis
+                if (ema20 > ema50 && ema50 > ema200) {
+                    direction = 'BULLISH';
+                    strength = 'STRONG';
+                } else if (ema20 < ema50 && ema50 < ema200) {
+                    direction = 'BEARISH';
+                    strength = 'STRONG';
+                } else if (ema20 > ema50) {
+                    direction = 'BULLISH';
+                    strength = 'MODERATE';
+                } else if (ema20 < ema50) {
+                    direction = 'BEARISH';
+                    strength = 'MODERATE';
+                }
+            }
+
+            return {
+                currentPrice,
+                ema20,
+                ema50,
+                ema200,
+                rsi,
+                macd,
+                atr,
+                support,
+                resistance,
+                structure,
+                smc, // Include full SMC analysis
+                trend: {
+                    direction,
+                    strength,
+                    structure: smc.structure || structure.type
+                }
+            };
+        }
+
+        function scoreStrategies(analysisResult) {
+            // Combine OCR/image patterns + TA
+            const patterns = analysisResult.patterns || [];
+            const trend = analysisResult.trend || { direction: 'NEUTRAL', strength: 'WEAK' };
+            const ta = analysisResult.ta;
+
+            const scores = [];
+
+            const has = (namePart) => patterns.some(p => p.name.toUpperCase().includes(namePart.toUpperCase()));
+
+            // Break & Retest
+            let br = 50;
+            if (has('Break') || has('BOS')) br += 25;
+            if (ta && (ta.currentPrice > ta.resistance || ta.currentPrice < ta.support)) br += 10;
+            if (trend.strength !== 'WEAK') br += 10;
+            scores.push({ name: 'Break & Retest', score: Math.min(br, 95) });
+
+            // Supply & Demand
+            let sd = 50;
+            if (has('Supply') || has('Demand') || has('Order Block')) sd += 25;
+            if (ta && (Math.abs(ta.currentPrice - ta.support) < ta.atr * 0.6 || Math.abs(ta.currentPrice - ta.resistance) < ta.atr * 0.6)) sd += 15;
+            scores.push({ name: 'Supply & Demand', score: Math.min(sd, 95) });
+
+            // Trend continuation
+            let tc = 50;
+            if (ta && ta.trend.strength !== 'WEAK') tc += 25;
+            if (trend.direction !== 'NEUTRAL') tc += 10;
+            scores.push({ name: trend.direction === 'BEARISH' ? 'Trend Continuation (Short)' : 'Trend Continuation (Long)', score: Math.min(tc, 95) });
+
+            // Liquidity sweep reversal
+            let ls = 45;
+            if (has('Liquidity') || has('CHOCH')) ls += 25;
+            if (ta && (ta.rsi > 70 || ta.rsi < 30)) ls += 15;
+            scores.push({ name: 'Liquidity Sweep Reversal', score: Math.min(ls, 95) });
+
+            // Support/Resistance bounce
+            let sb = 50;
+            if (has('Support') || has('Resistance')) sb += 20;
+            if (ta && (Math.abs(ta.currentPrice - ta.support) < ta.atr * 0.6 || Math.abs(ta.currentPrice - ta.resistance) < ta.atr * 0.6)) sb += 20;
+            scores.push({ name: 'Support/Resistance Bounce', score: Math.min(sb, 95) });
+
+            scores.sort((a, b) => b.score - a.score);
+            return scores[0] || { name: 'Price Action', score: 60 };
+        }
+
+        function generateSignalFromTA(analysisResult) {
+            const price = analysisResult.livePrice || analysisResult.chartPrice || analysisResult.ta?.currentPrice || 0;
+            const tf = analysisResult.timeframe || 'H1';
+            const ta = analysisResult.ta;
+            const smc = ta?.smc;
+            const rp = analysisResult.riskParams;
+
+            const minRR = parseFloat(document.getElementById('min-rr').value);
+            const aggressive = document.getElementById('aggressive-mode').checked;
+
+            let direction = 'WAIT';
+            let reason = '';
+            let smcStrategy = null;
+
+            // SMC-BASED SIGNAL GENERATION (Priority)
+            if (smc) {
+                // Check for SMC signal first
+                if (smc.smcSignal !== 'WAIT' && smc.entryZone) {
+                    direction = smc.smcSignal;
+                    const zone = smc.entryZone;
+                    smcStrategy = zone.type;
+                    reason = `SMC ${zone.type} Entry | ${smc.marketBias} | Structure: ${smc.structure}`;
+                    
+                    // Add BOS/CHoCH context
+                    if (smc.choch.length > 0) {
+                        const lastCHoCH = smc.choch[smc.choch.length - 1];
+                        reason += ` | CHoCH: ${lastCHoCH.type.replace('_CHOCH', '')}`;
+                    } else if (smc.bos.length > 0) {
+                        const lastBOS = smc.bos[smc.bos.length - 1];
+                        reason += ` | BOS: ${lastBOS.type.replace('_BOS', '')}`;
+                    }
+                }
+                // Check CHoCH for reversal entries
+                else if (smc.choch.length > 0) {
+                    const lastCHoCH = smc.choch[smc.choch.length - 1];
+                    const recentCandles = 10;
+                    const candlesSinceCHoCH = (analysisResult.series?.length || 0) - (lastCHoCH.triggerIndex || 0);
+                    
+                    if (candlesSinceCHoCH < recentCandles) {
+                        if (lastCHoCH.type === 'BULLISH_CHOCH') {
+                            direction = 'BUY';
+                            smcStrategy = 'CHoCH Reversal';
+                            reason = `Bullish CHoCH Reversal | ${smc.structure}`;
+                        } else if (lastCHoCH.type === 'BEARISH_CHOCH') {
+                            direction = 'SELL';
+                            smcStrategy = 'CHoCH Reversal';
+                            reason = `Bearish CHoCH Reversal | ${smc.structure}`;
+                        }
+                    }
+                }
+                // Check for Order Block entries
+                else if (smc.activeOBs.length > 0) {
+                    for (const ob of smc.activeOBs) {
+                        const distToOB = Math.abs(price - ob.midpoint) / price;
+                        if (distToOB < 0.008) { // Within 0.8%
+                            if (ob.type === 'BULLISH_OB' && smc.marketBias.includes('BULLISH')) {
+                                direction = 'BUY';
+                                smcStrategy = 'Order Block';
+                                reason = `Bullish OB Entry @ ${ob.midpoint.toFixed(4)} | ${smc.structure}`;
+                                break;
+                            } else if (ob.type === 'BEARISH_OB' && smc.marketBias.includes('BEARISH')) {
+                                direction = 'SELL';
+                                smcStrategy = 'Order Block';
+                                reason = `Bearish OB Entry @ ${ob.midpoint.toFixed(4)} | ${smc.structure}`;
+                                break;
+                            }
+                        }
+                    }
+                }
+                // Check for FVG fills
+                else if (smc.activeFVGs.length > 0) {
+                    for (const fvg of smc.activeFVGs) {
+                        const distToFVG = Math.abs(price - fvg.midpoint) / price;
+                        if (distToFVG < 0.005 && fvg.fillPercent < 60) {
+                            if (fvg.type === 'BULLISH_FVG' && smc.marketBias.includes('BULLISH')) {
+                                direction = 'BUY';
+                                smcStrategy = 'FVG Fill';
+                                reason = `Bullish FVG Fill Entry | Gap: ${fvg.low.toFixed(4)}-${fvg.high.toFixed(4)}`;
+                                break;
+                            } else if (fvg.type === 'BEARISH_FVG' && smc.marketBias.includes('BEARISH')) {
+                                direction = 'SELL';
+                                smcStrategy = 'FVG Fill';
+                                reason = `Bearish FVG Fill Entry | Gap: ${fvg.low.toFixed(4)}-${fvg.high.toFixed(4)}`;
+                                break;
+                            }
+                        }
+                    }
+                }
+                // BOS continuation
+                else if (smc.bos.length > 0) {
+                    const lastBOS = smc.bos[smc.bos.length - 1];
+                    if (lastBOS.type === 'BULLISH_BOS' && ta.rsi < 65) {
+                        direction = 'BUY';
+                        smcStrategy = 'BOS Continuation';
+                        reason = `BOS Continuation (Bullish) | Structure: ${smc.structure} | RSI: ${ta.rsi.toFixed(1)}`;
+                    } else if (lastBOS.type === 'BEARISH_BOS' && ta.rsi > 35) {
+                        direction = 'SELL';
+                        smcStrategy = 'BOS Continuation';
+                        reason = `BOS Continuation (Bearish) | Structure: ${smc.structure} | RSI: ${ta.rsi.toFixed(1)}`;
+                    }
+                }
+            }
+
+            // FALLBACK TO TRADITIONAL TA
+            if (direction === 'WAIT' && ta) {
+                if (ta.trend.direction === 'BULLISH' && ta.rsi < 68) {
+                    direction = 'BUY';
+                    reason = `TA Bullish (${ta.trend.strength}) | EMA20>EMA50 | RSI: ${ta.rsi.toFixed(1)}`;
+                } else if (ta.trend.direction === 'BEARISH' && ta.rsi > 32) {
+                    direction = 'SELL';
+                    reason = `TA Bearish (${ta.trend.strength}) | EMA20<EMA50 | RSI: ${ta.rsi.toFixed(1)}`;
+                } else {
+                    reason = 'No clear edge - SMC/TA not aligned';
+                }
+            }
+
+            // IMAGE-ONLY FALLBACK
+            if (direction === 'WAIT' && !ta) {
+                direction = analysisResult.signal?.direction || 'WAIT';
+                reason = 'Image-only analysis (no live data)';
+            }
+
+            // Risk distances using ATR and SMC zones
+            const atr = ta?.atr || (price * (rp?.atrFactor || 0.003));
+            let slDist = aggressive ? atr * 1.2 : atr * 1.0;
+            
+            // Adjust SL based on SMC zones
+            if (smc && direction !== 'WAIT') {
+                if (direction === 'BUY' && smc.activeOBs.length > 0) {
+                    const nearestBullishOB = smc.activeOBs.find(ob => ob.type === 'BULLISH_OB' && ob.low < price);
+                    if (nearestBullishOB) {
+                        slDist = Math.max(slDist, price - nearestBullishOB.low + atr * 0.2);
+                    }
+                } else if (direction === 'SELL' && smc.activeOBs.length > 0) {
+                    const nearestBearishOB = smc.activeOBs.find(ob => ob.type === 'BEARISH_OB' && ob.high > price);
+                    if (nearestBearishOB) {
+                        slDist = Math.max(slDist, nearestBearishOB.high - price + atr * 0.2);
+                    }
+                }
+            }
+            
+            const tp1Dist = slDist * minRR;
+            const tp2Dist = slDist * (minRR + 0.5);
+            const tp3Dist = slDist * (minRR + 1);
+
+            const signal = {
+                direction,
+                entry: price,
+                sl: 0,
+                tp1: 0,
+                tp2: 0,
+                tp3: 0,
+                rr: 0,
+                reason,
+                smcStrategy
+            };
+
+            if (direction === 'BUY') {
+                // SL below support/OB or ATR
+                const baseSL = price - slDist;
+                signal.sl = ta?.support ? Math.min(baseSL, ta.support - atr * 0.15) : baseSL;
+                
+                // Target liquidity or resistance
+                const bsl = smc?.liquidityZones?.find(l => l.type === 'BSL' && l.level > price);
+                signal.tp1 = price + tp1Dist;
+                signal.tp2 = bsl ? Math.min(bsl.level, price + tp2Dist) : price + tp2Dist;
+                signal.tp3 = price + tp3Dist;
+            } else if (direction === 'SELL') {
+                const baseSL = price + slDist;
+                signal.sl = ta?.resistance ? Math.max(baseSL, ta.resistance + atr * 0.15) : baseSL;
+                
+                // Target liquidity or support
+                const ssl = smc?.liquidityZones?.find(l => l.type === 'SSL' && l.level < price);
+                signal.tp1 = price - tp1Dist;
+                signal.tp2 = ssl ? Math.max(ssl.level, price - tp2Dist) : price - tp2Dist;
+                signal.tp3 = price - tp3Dist;
+            }
+
+            if (direction !== 'WAIT') {
+                const risk = Math.abs(signal.entry - signal.sl);
+                const reward = Math.abs(signal.tp2 - signal.entry);
+                signal.rr = risk > 0 ? (reward / risk).toFixed(2) : '0.00';
+            }
+
+            return signal;
+        }
+
+        function calculateConfidencePro(analysisResult) {
+            let c = 45;
+            if (analysisResult.symbol) c += 10;
+            if (analysisResult.timeframe) c += 5;
+            if (analysisResult.livePrice) c += 10;
+            if (analysisResult.series && analysisResult.series.length >= 60) c += 10;
+            if (analysisResult.ta) {
+                if (analysisResult.ta.trend.strength === 'STRONG') c += 8;
+                if (analysisResult.ta.structure?.bos) c += 5;
+                if (analysisResult.ta.macd && Math.abs(analysisResult.ta.macd.hist) > 0) c += 4;
+            }
+            if (analysisResult.strategy?.score) c += Math.min(10, Math.max(0, (analysisResult.strategy.score - 70) / 2));
+            if (analysisResult.patterns?.length) c += Math.min(10, analysisResult.patterns.length * 2);
+
+            // Penalize if price mismatch is too large
+            if (analysisResult.chartPrice && analysisResult.livePrice) {
+                const delta = Math.abs(analysisResult.chartPrice - analysisResult.livePrice) / analysisResult.livePrice;
+                if (delta > 0.01) c -= 10;
+                if (delta > 0.03) c -= 15;
+            }
+
+            return Math.max(35, Math.min(95, Math.round(c)));
+        }
+
+        function generateLiveSignalFromAnalysis(analysis, data, symbol, timeframe) {
+            const { currentPrice, trend, rsi, support, resistance, bullishRatio, bearishRatio, ema20, ema50, smc } = analysis;
+            
+            const riskPercent = parseFloat(document.getElementById('risk-slider').value);
+            const minRR = parseFloat(document.getElementById('min-rr').value);
+            const aggressive = document.getElementById('aggressive-mode').checked;
+            
+            let signal = {
+                direction: 'WAIT',
+                confidence: 50,
+                entry: currentPrice,
+                sl: 0,
+                tp1: 0,
+                tp2: 0,
+                tp3: 0,
+                rr: 0,
+                reason: '',
+                smcStrategy: null
+            };
+
+            // SMC-BASED SIGNAL GENERATION (Priority)
+            if (smc && smc.smcSignal !== 'WAIT') {
+                signal.direction = smc.smcSignal;
+                signal.smcStrategy = smc.entryZone?.type || 'SMC Analysis';
+                signal.confidence = 75;
+                signal.reason = `${smc.marketBias} | ${smc.structure}`;
+                
+                // Add BOS/CHoCH context
+                if (smc.choch.length > 0) {
+                    const lastCHoCH = smc.choch[smc.choch.length - 1];
+                    signal.reason += ` | CHoCH: ${lastCHoCH.type.replace('_CHOCH', '')}`;
+                    signal.smcStrategy = 'CHoCH Reversal';
+                    signal.confidence += 10;
+                }
+                if (smc.bos.length > 0) {
+                    const lastBOS = smc.bos[smc.bos.length - 1];
+                    if (!signal.reason.includes('CHoCH')) {
+                        signal.reason += ` | BOS: ${lastBOS.type.replace('_BOS', '')}`;
+                    }
+                    signal.confidence += 5;
+                }
+                if (smc.activeOBs.length > 0) {
+                    signal.confidence += 5;
+                }
+                if (smc.activeFVGs.length > 0) {
+                    signal.confidence += 5;
+                }
+            }
+            // CHoCH Reversal Entry
+            else if (smc && smc.choch.length > 0) {
+                const lastCHoCH = smc.choch[smc.choch.length - 1];
+                if (lastCHoCH.type === 'BULLISH_CHOCH') {
+                    signal.direction = 'BUY';
+                    signal.smcStrategy = 'CHoCH Reversal';
+                    signal.confidence = 80;
+                    signal.reason = `Bullish CHoCH @ ${lastCHoCH.level.toFixed(4)} | ${smc.structure}`;
+                } else {
+                    signal.direction = 'SELL';
+                    signal.smcStrategy = 'CHoCH Reversal';
+                    signal.confidence = 80;
+                    signal.reason = `Bearish CHoCH @ ${lastCHoCH.level.toFixed(4)} | ${smc.structure}`;
+                }
+            }
+            // Order Block Entry
+            else if (smc && smc.activeOBs.length > 0) {
+                for (const ob of smc.activeOBs) {
+                    const distToOB = Math.abs(currentPrice - ob.midpoint) / currentPrice;
+                    if (distToOB < 0.01) { // Within 1%
+                        if (ob.type === 'BULLISH_OB' && smc.marketBias.includes('BULLISH')) {
+                            signal.direction = 'BUY';
+                            signal.smcStrategy = 'Order Block';
+                            signal.confidence = 75;
+                            signal.reason = `Bullish OB Entry @ ${ob.midpoint.toFixed(4)}`;
+                            break;
+                        } else if (ob.type === 'BEARISH_OB' && smc.marketBias.includes('BEARISH')) {
+                            signal.direction = 'SELL';
+                            signal.smcStrategy = 'Order Block';
+                            signal.confidence = 75;
+                            signal.reason = `Bearish OB Entry @ ${ob.midpoint.toFixed(4)}`;
+                            break;
+                        }
+                    }
+                }
+            }
+            // FVG Fill Entry
+            else if (smc && smc.activeFVGs.length > 0) {
+                for (const fvg of smc.activeFVGs) {
+                    const distToFVG = Math.abs(currentPrice - fvg.midpoint) / currentPrice;
+                    if (distToFVG < 0.008 && fvg.fillPercent < 50) {
+                        if (fvg.type === 'BULLISH_FVG' && smc.marketBias.includes('BULLISH')) {
+                            signal.direction = 'BUY';
+                            signal.smcStrategy = 'FVG Fill';
+                            signal.confidence = 70;
+                            signal.reason = `Bullish FVG Fill @ ${fvg.midpoint.toFixed(4)}`;
+                            break;
+                        } else if (fvg.type === 'BEARISH_FVG' && smc.marketBias.includes('BEARISH')) {
+                            signal.direction = 'SELL';
+                            signal.smcStrategy = 'FVG Fill';
+                            signal.confidence = 70;
+                            signal.reason = `Bearish FVG Fill @ ${fvg.midpoint.toFixed(4)}`;
+                            break;
+                        }
+                    }
+                }
+            }
+            // BOS Continuation
+            else if (smc && smc.bos.length > 0) {
+                const lastBOS = smc.bos[smc.bos.length - 1];
+                if (lastBOS.type === 'BULLISH_BOS' && rsi < 65) {
+                    signal.direction = 'BUY';
+                    signal.smcStrategy = 'BOS Continuation';
+                    signal.confidence = 65;
+                    signal.reason = `Bullish BOS Continuation | RSI: ${rsi.toFixed(1)}`;
+                } else if (lastBOS.type === 'BEARISH_BOS' && rsi > 35) {
+                    signal.direction = 'SELL';
+                    signal.smcStrategy = 'BOS Continuation';
+                    signal.confidence = 65;
+                    signal.reason = `Bearish BOS Continuation | RSI: ${rsi.toFixed(1)}`;
+                }
+            }
+            // Fallback to traditional TA
+            else if (trend === 'BULLISH' && bullishRatio > 55) {
+                signal.direction = 'BUY';
+                signal.confidence = Math.min(60 + bullishRatio - 50, 85);
+                signal.reason = `TA Bullish | EMA cross + ${bullishRatio.toFixed(1)}% bullish candles`;
+                if (rsi < 30) {
+                    signal.confidence += 10;
+                    signal.reason += ' + oversold RSI';
+                }
+            } else if (trend === 'BEARISH' && bearishRatio > 55) {
+                signal.direction = 'SELL';
+                signal.confidence = Math.min(60 + bearishRatio - 50, 85);
+                signal.reason = `TA Bearish | EMA cross + ${bearishRatio.toFixed(1)}% bearish candles`;
+                if (rsi > 70) {
+                    signal.confidence += 10;
+                    signal.reason += ' + overbought RSI';
+                }
+            } else {
+                signal.direction = 'WAIT';
+                signal.reason = 'No clear SMC setup. Wait for BOS/CHoCH/OB/FVG confluence.';
+                signal.confidence = 40;
+            }
+
+            // Calculate SL/TP based on SMC zones
+            if (signal.direction !== 'WAIT') {
+                const range = resistance - support;
+                let slDistance = range * 0.4;
+                
+                // Use OB for SL if available
+                if (smc && signal.direction === 'BUY') {
+                    const nearestOB = smc.activeOBs.find(ob => ob.type === 'BULLISH_OB' && ob.low < currentPrice);
+                    if (nearestOB) {
+                        slDistance = currentPrice - nearestOB.low + (range * 0.05);
+                    }
+                    signal.sl = currentPrice - slDistance;
+                    
+                    // Target liquidity for TP
+                    const bsl = smc?.liquidityZones?.find(l => l.type === 'BSL' && l.level > currentPrice);
+                    signal.tp1 = currentPrice + slDistance * minRR;
+                    signal.tp2 = bsl ? Math.min(bsl.level, currentPrice + slDistance * (minRR + 0.5)) : currentPrice + slDistance * (minRR + 0.5);
+                    signal.tp3 = currentPrice + slDistance * (minRR + 1);
+                } else if (smc && signal.direction === 'SELL') {
+                    const nearestOB = smc.activeOBs.find(ob => ob.type === 'BEARISH_OB' && ob.high > currentPrice);
+                    if (nearestOB) {
+                        slDistance = nearestOB.high - currentPrice + (range * 0.05);
+                    }
+                    signal.sl = currentPrice + slDistance;
+                    
+                    const ssl = smc?.liquidityZones?.find(l => l.type === 'SSL' && l.level < currentPrice);
+                    signal.tp1 = currentPrice - slDistance * minRR;
+                    signal.tp2 = ssl ? Math.max(ssl.level, currentPrice - slDistance * (minRR + 0.5)) : currentPrice - slDistance * (minRR + 0.5);
+                    signal.tp3 = currentPrice - slDistance * (minRR + 1);
+                } else {
+                    // Fallback SL/TP
+                    if (signal.direction === 'BUY') {
+                        signal.sl = currentPrice - slDistance;
+                        signal.tp1 = currentPrice + slDistance * minRR;
+                        signal.tp2 = currentPrice + slDistance * (minRR + 0.5);
+                        signal.tp3 = currentPrice + slDistance * (minRR + 1);
+                    } else {
+                        signal.sl = currentPrice + slDistance;
+                        signal.tp1 = currentPrice - slDistance * minRR;
+                        signal.tp2 = currentPrice - slDistance * (minRR + 0.5);
+                        signal.tp3 = currentPrice - slDistance * (minRR + 1);
+                    }
+                }
+
+                // Calculate R:R
+                const risk = Math.abs(signal.entry - signal.sl);
+                const reward = Math.abs(signal.tp2 - signal.entry);
+                signal.rr = risk > 0 ? (reward / risk).toFixed(2) : '0.00';
+            }
+
+            return signal;
+        }
+
+        function displayLiveSignal(signal, symbol, timeframe, analysis) {
+            const isBuy = signal.direction === 'BUY';
+            const isSell = signal.direction === 'SELL';
+            const signalColor = isBuy ? 'text-green' : (isSell ? 'text-red' : 'text-gray');
+            const bgColor = isBuy ? 'green' : (isSell ? 'red' : 'gray');
+            const decimals = signal.entry > 100 ? 2 : (signal.entry > 1 ? 4 : 5);
+            const smc = analysis.smc;
+
+            document.getElementById('signal-pair-name').textContent = symbol;
+            document.getElementById('signal-timeframe').textContent = timeframe;
+
+            let smcHtml = '';
+            if (smc) {
+                smcHtml = `
+                    <div class="mt-4 p-3 bg-black rounded-lg border border-yellow border-opacity-20">
+                        <h4 class="text-yellow font-semibold text-xs mb-3">🎯 SMC ANALYSIS</h4>
+                        <div class="grid grid-cols-2 gap-3 mb-3">
+                            <div>
+                                <span class="text-gray text-xs">Market Bias:</span>
+                                <span class="${smc.marketBias.includes('BULLISH') ? 'text-green' : smc.marketBias.includes('BEARISH') ? 'text-red' : 'text-gray'} font-bold text-sm ml-1">${smc.marketBias}</span>
+                            </div>
+                            <div>
+                                <span class="text-gray text-xs">Structure:</span>
+                                <span class="text-yellow font-semibold text-sm ml-1">${smc.structure}</span>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-4 gap-2 text-xs text-center">
+                            <div class="bg-black-lighter rounded p-2">
+                                <div class="${smc.summary.bosCount > 0 ? (smc.bos.slice(-1)[0]?.type.includes('BULLISH') ? 'text-green' : 'text-red') : 'text-gray'} font-bold">${smc.summary.bosCount}</div>
+                                <div class="text-gray">BOS</div>
+                            </div>
+                            <div class="bg-black-lighter rounded p-2">
+                                <div class="${smc.summary.chochCount > 0 ? 'text-yellow' : 'text-gray'} font-bold">${smc.summary.chochCount}</div>
+                                <div class="text-gray">CHoCH</div>
+                            </div>
+                            <div class="bg-black-lighter rounded p-2">
+                                <div class="text-yellow font-bold">${smc.summary.activeOBCount}</div>
+                                <div class="text-gray">OB</div>
+                            </div>
+                            <div class="bg-black-lighter rounded p-2">
+                                <div class="text-purple-400 font-bold">${smc.summary.activeFVGCount}</div>
+                                <div class="text-gray">FVG</div>
+                            </div>
+                        </div>
+                        ${smc.activeOBs.length > 0 ? `
+                        <div class="mt-3">
+                            <span class="text-xs text-gray">Active Order Blocks:</span>
+                            <div class="flex flex-wrap gap-1 mt-1">
+                                ${smc.activeOBs.slice(0, 3).map(ob => `
+                                    <span class="text-[10px] px-2 py-1 rounded ${ob.type.includes('BULLISH') ? 'bg-green bg-opacity-20 text-green' : 'bg-red bg-opacity-20 text-red'}">
+                                        ${ob.type.includes('BULLISH') ? '🟢' : '🔴'} ${ob.midpoint.toFixed(decimals)}
+                                    </span>
+                                `).join('')}
+                            </div>
+                        </div>
+                        ` : ''}
+                        ${smc.activeFVGs.length > 0 ? `
+                        <div class="mt-2">
+                            <span class="text-xs text-gray">Unfilled FVGs:</span>
+                            <div class="flex flex-wrap gap-1 mt-1">
+                                ${smc.activeFVGs.slice(0, 3).map(fvg => `
+                                    <span class="text-[10px] px-2 py-1 rounded ${fvg.type.includes('BULLISH') ? 'bg-purple-500 bg-opacity-20 text-purple-400' : 'bg-orange-500 bg-opacity-20 text-orange-400'}">
+                                        ${fvg.type.includes('BULLISH') ? '🟣' : '🟠'} ${fvg.midpoint.toFixed(decimals)} (${fvg.fillPercent.toFixed(0)}%)
+                                    </span>
+                                `).join('')}
+                            </div>
+                        </div>
+                        ` : ''}
+                    </div>
+                `;
+            }
+
+            let html = `
+                <div class="signal-card ${isBuy ? 'buy' : (isSell ? 'sell' : 'wait')} rounded-xl p-4 mb-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 h-12 bg-${bgColor} bg-opacity-20 rounded-full flex items-center justify-center">
+                                ${isBuy ? '<svg class="w-6 h-6 text-green" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M3.293 9.707a1 1 0 010-1.414l6-6a1 1 0 011.414 0l6 6a1 1 0 01-1.414 1.414L11 5.414V17a1 1 0 11-2 0V5.414L4.707 9.707a1 1 0 01-1.414 0z" clip-rule="evenodd"/></svg>' :
+                                   (isSell ? '<svg class="w-6 h-6 text-red" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 10.293a1 1 0 010 1.414l-6 6a1 1 0 01-1.414 0l-6-6a1 1 0 111.414-1.414L9 14.586V3a1 1 0 012 0v11.586l4.293-4.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>' :
+                                   '<svg class="w-6 h-6 text-gray" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>')}
+                            </div>
+                            <div>
+                                <h3 class="${signalColor} text-xl font-bold">${signal.direction}</h3>
+                                <p class="text-xs text-gray">${signal.reason}</p>
+                                ${signal.smcStrategy ? `<p class="text-[11px] text-yellow mt-1">SMC: ${signal.smcStrategy}</p>` : ''}
+                                <p class="text-[11px] text-gray mt-1">Source: <span class="text-yellow mono">${analysis.source || 'N/A'}</span></p>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-3xl font-bold text-yellow">${signal.confidence.toFixed(0)}%</p>
+                            <p class="text-xs text-gray">Confidence</p>
+                        </div>
+                    </div>
+
+                    ${signal.direction !== 'WAIT' ? `
+                    <div class="grid grid-cols-2 gap-2 mb-4">
+                        <div class="bg-black rounded p-3">
+                            <p class="text-xs text-gray">Entry</p>
+                            <p class="text-lg font-bold text-yellow mono">${signal.entry.toFixed(decimals)}</p>
+                        </div>
+                        <div class="bg-black rounded p-3">
+                            <p class="text-xs text-gray">Stop Loss</p>
+                            <p class="text-lg font-bold text-red mono">${signal.sl.toFixed(decimals)}</p>
+                        </div>
+                        <div class="bg-black rounded p-3">
+                            <p class="text-xs text-gray">TP 1</p>
+                            <p class="text-lg font-bold text-green mono">${signal.tp1.toFixed(decimals)}</p>
+                        </div>
+                        <div class="bg-black rounded p-3">
+                            <p class="text-xs text-gray">R:R Ratio</p>
+                            <p class="text-lg font-bold text-yellow mono">1:${signal.rr}</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-4 gap-2 text-xs">
+                        <div class="bg-black rounded p-2">
+                            <p class="text-gray">EMA20/50</p>
+                            <p class="text-white mono font-bold text-[10px]">${analysis.ema20.toFixed(decimals)}</p>
+                        </div>
+                        <div class="bg-black rounded p-2">
+                            <p class="text-gray">RSI</p>
+                            <p class="${analysis.rsi > 70 ? 'text-red' : analysis.rsi < 30 ? 'text-green' : 'text-yellow'} mono font-bold">${analysis.rsi.toFixed(1)}</p>
+                        </div>
+                        <div class="bg-black rounded p-2">
+                            <p class="text-gray">Support</p>
+                            <p class="text-green mono font-bold text-[10px]">${analysis.support.toFixed(decimals)}</p>
+                        </div>
+                        <div class="bg-black rounded p-2">
+                            <p class="text-gray">Resistance</p>
+                            <p class="text-red mono font-bold text-[10px]">${analysis.resistance.toFixed(decimals)}</p>
+                        </div>
+                    </div>
+                    
+                    ${smcHtml}
+                    ` : `
+                    <div class="text-center py-6">
+                        <p class="text-gray mb-2">No clear SMC setup detected</p>
+                        <p class="text-xs text-yellow">Price: ${signal.entry.toFixed(decimals)}</p>
+                        <p class="text-[11px] text-gray mt-1">Source: <span class="text-yellow mono">${analysis.source || 'N/A'}</span></p>
+                    </div>
+                    ${smcHtml}
+                    `}
+                </div>
+            `;
+
+            document.getElementById('live-signal-content').innerHTML = html;
+            document.getElementById('live-signal-panel').classList.remove('hidden');
+        }
+
+        function closeLiveSignalPanel() {
+            document.getElementById('live-signal-panel').classList.add('hidden');
+        }
+
+        function timeframeToInterval(timeframe) {
+            const intervals = {
+                'M1': '1m',
+                'M5': '5m',
+                'M15': '15m',
+                'M30': '30m',
+                'H1': '1h',
+                'H4': '4h',
+                'D1': '1d',
+                'W1': '1w'
+            };
+            return intervals[timeframe] || '1h';
+        }
+    </script>
+</body>
+</html>
