@@ -78,9 +78,12 @@ class MarketDataService {
   // Get market series (OHLCV candles)
   async getMarketSeries(symbol, timeframe = 'H1', limit = 120) {
     try {
+      // Normalize timeframe format
+      const normalizedTimeframe = this.normalizeTimeframe(timeframe);
+
       const params = new URLSearchParams({
         symbol: this.normalizeSymbolKey(symbol),
-        timeframe,
+        timeframe: normalizedTimeframe,
         limit: Math.min(limit, 1000)
       });
 
@@ -96,6 +99,24 @@ class MarketDataService {
       console.error('Market series error:', error);
       return [];
     }
+  }
+
+  // Normalize timeframe format (H1 → 1h, H4 → 4h, D1 → 1d, M5 → 5m, etc)
+  normalizeTimeframe(tf) {
+    if (typeof tf !== 'string') return '1h';
+    const upperTf = tf.toUpperCase();
+    // Already normalized
+    if (['1M', '5M', '15M', '30M', '1H', '4H', '1D', '1W'].includes(upperTf)) return upperTf.toLowerCase();
+    // Convert format
+    return upperTf
+      .replace('H1', '1h')
+      .replace('H4', '4h')
+      .replace('D1', '1d')
+      .replace('M30', '30m')
+      .replace('M15', '15m')
+      .replace('M5', '5m')
+      .replace('M1', '1m')
+      .replace('W1', '1w');
   }
 
   // Get batch snapshot for multiple symbols

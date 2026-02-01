@@ -118,13 +118,33 @@ router.get('/series', async (req, res) => {
       });
     }
 
+    // Normalize timeframe format
+    const normalizeTimeframe = (tf) => {
+      if (typeof tf !== 'string') return '1h';
+      const upperTf = tf.toUpperCase();
+      // Already normalized
+      if (['1M', '5M', '15M', '30M', '1H', '4H', '1D', '1W'].includes(upperTf)) return upperTf.toLowerCase();
+      // Convert format
+      return upperTf
+        .replace('H1', '1h')
+        .replace('H4', '4h')
+        .replace('D1', '1d')
+        .replace('M30', '30m')
+        .replace('M15', '15m')
+        .replace('M5', '5m')
+        .replace('M1', '1m')
+        .replace('W1', '1w');
+    };
+
+    const normalizedTimeframe = normalizeTimeframe(timeframe);
+
     // Validate timeframe
     const validTimeframes = ['1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w'];
-    if (!validTimeframes.includes(timeframe)) {
+    if (!validTimeframes.includes(normalizedTimeframe)) {
       return res.status(400).json({
         success: false,
         error: 'INVALID_TIMEFRAME',
-        message: 'Invalid timeframe'
+        message: `Invalid timeframe: ${timeframe} (normalized to: ${normalizedTimeframe})`
       });
     }
 
@@ -134,7 +154,7 @@ router.get('/series', async (req, res) => {
     // Try to fetch from Binance
     try {
       const response = await fetch(
-        `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${timeframe}&limit=${validLimit}`
+        `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${normalizedTimeframe}&limit=${validLimit}`
       );
 
       if (!response.ok) {

@@ -1,13 +1,18 @@
 import React, { useState, useEffect } from 'react';
+import { TrendingUp, TrendingDown, Zap, AlertCircle } from 'lucide-react';
+import { marketService, analysisService } from '../../services/api';
 import { signalService, subscriptionService } from '../../services/api';
 
 /**
- * Market Feed Component - Real-time price updates
+ * Market Feed Component - Real-time price updates with signal generation
  */
-export default function MarketFeed() {
+export default function MarketFeed({ onSignalGenerated }) {
   const [markets, setMarkets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [favorites, setFavorites] = useState(['BTCUSDT', 'ETHUSDT', 'EURUSD', 'XAUUSD', 'GBPUSD']);
+  const [generatingSignal, setGeneratingSignal] = useState(null);
+  const [signals, setSignals] = useState({});
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     loadMarkets();
@@ -80,6 +85,73 @@ export default function MarketFeed() {
     }
   };
 
+  const handleGenerateSignal = async (symbol) => {
+    setGeneratingSignal(symbol);
+    setError(null);
+
+    try {
+      // Check access first
+      const accessCheck = await signalService.checkAccess();
+      if (!accessCheck.success || !accessCheck.data.canGenerate) {
+        setError('Cannot generate signal - trial limit or subscription required');
+        setGeneratingSignal(null);
+        return;
+      }
+
+      // Get market data
+      const marketResponse = await marketService.getMarketSeries(symbol, '1h', 120);
+      if (!marketResponse.success) {
+        throw new Error('Failed to fetch market data');
+      }
+
+      const klines = marketResponse.data.candles;
+      
+      // Analyze with SMC
+      const analysisResponse = await analysisService.analyzeSMC(klines);
+      if (!analysisResponse.success) {
+        throw new Error('Analysis failed');
+      }
+
+      const analysis = analysisResponse.data;
+
+      // Generate signal
+      const signalResponse = await analysisService.generateSignal(
+        analysis,
+        analysis.currentPrice,
+        symbol,
+        'H1'
+      );
+
+      if (!signalResponse.success) {
+        throw new Error('Signal generation failed');
+      }
+
+      const generatedSignal = {
+        direction: signalResponse.data.signal,
+        confidence: signalResponse.data.confidence,
+        entry: signalResponse.data.entry,
+        sl: signalResponse.data.stopLoss,
+        tp1: signalResponse.data.takeProfit,
+        rr: signalResponse.data.riskReward,
+        timestamp: new Date().toISOString()
+      };
+
+      setSignals(prev => ({ ...prev, [symbol]: generatedSignal }));
+      
+      if (onSignalGenerated) {
+        onSignalGenerated(symbol, generatedSignal);
+      }
+
+      console.log(`✓ Signal generated for ${symbol}:`, generatedSignal);
+    } catch (err) {
+      console.error(`✗ Signal generation error for ${symbol}:`, err);
+      setError(err.message || 'Failed to generate signal');
+      setSignals(prev => ({ ...prev, [symbol]: { error: err.message } }));
+    } finally {
+      setGeneratingSignal(null);
+    }
+  };
+
   return (
     <div className="bg-black-light rounded-xl p-6">
       <div className="flex items-center justify-between mb-4">
@@ -103,38 +175,105 @@ export default function MarketFeed() {
           <span className="text-xs text-gray-400 ml-2">Loading markets...</span>
         </div>
       ) : (
-        <div className="space-y-2 scrollbar-custom max-h-96 overflow-y-auto">
-          {markets.map(market => (
-            <div
-              key={market.symbol}
-              className="stat-card rounded-lg p-3 flex items-center justify-between cursor-pointer hover:bg-opacity-80 transition"
-            >
-              <div className="flex items-center gap-3 flex-1">
-                <div className="w-8 h-8 bg-yellow bg-opacity-20 rounded flex items-center justify-center text-yellow text-sm">
-                  {getSymbolIcon(market.symbol)}
-                </div>
-                <div>
-                  <p className="text-sm font-medium">{market.symbol.replace('USDT', '')}</p>
-                  <p className="text-xs text-gray">{market.symbol}</p>
-                </div>
-              </div>
-              <div className="text-right flex items-center gap-4">
-                <div>
-                  <p className="text-sm font-bold mono">${formatPrice(market.data.price)}</p>
-                  <p className={`text-xs ${market.data.change >= 0 ? 'text-green' : 'text-red'}`}>
-                    {market.data.change >= 0 ? '↑' : '↓'} {Math.abs(market.data.change).toFixed(2)}%
-                  </p>
-                </div>
-                <button
-                  onClick={() => removeFavorite(market.symbol)}
-                  className="text-gray hover:text-red text-lg"
-                >
-                  ✕
-                </button>
-              </div>
+        <>
+          {error && (
+            <div className="mb-4 bg-red/10 border border-red/50 text-red px-3 py-2 rounded-lg flex gap-2 items-start text-sm">
+              <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
+              <span>{error}</span>
             </div>
-          ))}
-        </div>
+          )}
+          
+          <div className="space-y-2 scrollbar-custom max-h-96 overflow-y-auto">
+            {markets.map(market => {
+              const signal = signals[market.symbol];
+              const isPositive = market.data.change >= 0;
+              
+              return (
+                <div
+                  key={market.symbol}
+                  className="group bg-black rounded-lg p-4 border border-gray-800 hover:border-yellow/50 cursor-pointer transition-all hover:shadow-lg hover:shadow-yellow/20"
+                  onClick={() => handleGenerateSignal(market.symbol)}
+                >
+                  <div className="flex items-center justify-between">
+                    {/* Left: Symbol & Price */}
+                    <div className="flex-1 flex items-center gap-3">
+                      <div className="w-10 h-10 bg-yellow/10 rounded-lg flex items-center justify-center text-yellow text-lg font-bold group-hover:bg-yellow/20 transition">
+                        {getSymbolIcon(market.symbol)}
+                      </div>
+                      <div>
+                        <p className="font-bold text-white">{market.symbol.replace('USDT', '').replace('USD', '')}</p>
+                        <p className="text-xs text-gray-400">{market.symbol}</p>
+                      </div>
+                    </div>
+
+                    {/* Center: Price & Change */}
+                    <div className="flex-1 text-center">
+                      <p className="text-lg font-mono font-bold text-yellow">${formatPrice(market.data.price)}</p>
+                      <p className={`text-sm font-semibold flex items-center justify-center gap-1 ${isPositive ? 'text-green' : 'text-red'}`}>
+                        {isPositive ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                        {isPositive ? '+' : ''}{market.data.change.toFixed(2)}%
+                      </p>
+                    </div>
+
+                    {/* Right: Signal & Controls */}
+                    <div className="flex-1 flex flex-col items-end gap-2">
+                      {generatingSignal === market.symbol ? (
+                        <div className="flex items-center gap-2">
+                          <div className="w-4 h-4 border-2 border-yellow/30 border-t-yellow rounded-full animate-spin"></div>
+                          <span className="text-xs text-gray-400">Analyzing...</span>
+                        </div>
+                      ) : signal && !signal.error ? (
+                        <div className="flex items-center gap-2">
+                          <div className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 ${
+                            signal.direction === 'BUY' ? 'bg-green/20 text-green' :
+                            signal.direction === 'SELL' ? 'bg-red/20 text-red' :
+                            'bg-gray/20 text-gray'
+                          }`}>
+                            <Zap size={12} />
+                            {signal.direction}
+                          </div>
+                          <span className="text-xs text-gray-500">{signal.confidence}%</span>
+                        </div>
+                      ) : null}
+                      
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeFavorite(market.symbol);
+                        }}
+                        className="text-gray-400 hover:text-red transition text-sm"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Signal Details Expanded */}
+                  {signal && !signal.error && (
+                    <div className="mt-3 pt-3 border-t border-gray-700 grid grid-cols-4 gap-2 text-xs">
+                      <div className="text-center">
+                        <p className="text-gray-500">Entry</p>
+                        <p className="font-mono font-bold text-green">${formatPrice(signal.entry)}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-gray-500">S/L</p>
+                        <p className="font-mono font-bold text-red">${formatPrice(signal.sl)}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-gray-500">T/P</p>
+                        <p className="font-mono font-bold text-green">${formatPrice(signal.tp1)}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-gray-500">R:R</p>
+                        <p className="font-mono font-bold text-yellow">{signal.rr?.toFixed(2) || 'N/A'}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
     </div>
   );

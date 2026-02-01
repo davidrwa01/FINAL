@@ -87,6 +87,24 @@ export const signalService = {
 };
 
 // Market data services
+// Normalize timeframe format (H1 → 1h, H4 → 4h, D1 → 1d, M5 → 5m, etc)
+function normalizeTimeframe(tf) {
+  if (typeof tf !== 'string') return '1h';
+  const upperTf = tf.toUpperCase();
+  // Already normalized
+  if (['1M', '5M', '15M', '30M', '1H', '4H', '1D', '1W'].includes(upperTf)) return upperTf.toLowerCase();
+  // Convert format
+  return upperTf
+    .replace('H1', '1h')
+    .replace('H4', '4h')
+    .replace('D1', '1d')
+    .replace('M30', '30m')
+    .replace('M15', '15m')
+    .replace('M5', '5m')
+    .replace('M1', '1m')
+    .replace('W1', '1w');
+}
+
 export const marketService = {
   getCryptoSnapshot: async () => {
     const response = await api.get('/market/crypto/snapshot');
@@ -98,9 +116,11 @@ export const marketService = {
     return response.data;
   },
   
-  getMarketSeries: async (symbol, timeframe = 'H1', limit = 120) => {
+  getMarketSeries: async (symbol, timeframe = '1h', limit = 120) => {
+    // Normalize timeframe format (H1 → 1h, H4 → 4h, D1 → 1d)
+    const normalizedTimeframe = normalizeTimeframe(timeframe);
     const response = await api.get('/market/series', {
-      params: { symbol, timeframe, limit }
+      params: { symbol, timeframe: normalizedTimeframe, limit }
     });
     return response.data;
   },
