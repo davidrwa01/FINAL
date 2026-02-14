@@ -1,150 +1,173 @@
 import React, { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, Zap, AlertCircle } from 'lucide-react';
-import { marketService, analysisService } from '../../services/api';
-import { signalService, subscriptionService } from '../../services/api';
+import { signalService, analysisService } from '../../services/api';
 
 /**
- * Market Feed Component - Real-time price updates with signal generation
+ * Market Feed — Real-time prices with one-click SMC signal generation.
+ * 
+ * FIX: Uses analysisService.getFullAnalysis() (single API call)
+ *      instead of 3 separate calls with methods that didn't exist.
  */
 export default function MarketFeed({ onSignalGenerated }) {
-  const [markets, setMarkets] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [favorites, setFavorites] = useState(['BTCUSDT', 'ETHUSDT', 'EURUSD', 'XAUUSD', 'GBPUSD']);
+  const [markets, setMarkets]                   = useState([]);
+  const [loading, setLoading]                   = useState(true);
+  const [favorites, setFavorites]               = useState(['BTCUSDT', 'ETHUSDT', 'EURUSD', 'XAUUSD', 'GBPUSD']);
   const [generatingSignal, setGeneratingSignal] = useState(null);
-  const [signals, setSignals] = useState({});
-  const [error, setError] = useState(null);
+  const [signals, setSignals]                   = useState({});
+  const [error, setError]                       = useState(null);
 
   useEffect(() => {
     loadMarkets();
-    const interval = setInterval(loadMarkets, 10000);
-    return () => clearInterval(interval);
-  }, []);
+    const iv = setInterval(loadMarkets, 10000);
+    return () => clearInterval(iv);
+  }, [favorites]);
 
+  // ─── Fetch live prices ────────────────────────────────────
   const loadMarkets = async () => {
     try {
       const allPrices = {};
-      
-      // Fetch crypto
-      const cryptoRes = await fetch(
-        `https://api.binance.com/api/v3/ticker/24hr?symbols=${JSON.stringify(['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'PAXGUSDT'])}`
-      );
-      const cryptoData = await cryptoRes.json();
-      
-      if (Array.isArray(cryptoData)) {
-        cryptoData.forEach(ticker => {
-          allPrices[ticker.symbol] = {
-            price: parseFloat(ticker.lastPrice),
-            change: parseFloat(ticker.priceChangePercent)
+
+      // Crypto via Binance
+      const cryptoSyms = favorites.filter(s => s.endsWith('USDT'));
+      if (cryptoSyms.length > 0) {
+        try {
+          const res  = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbols=${JSON.stringify(cryptoSyms)}`);
+          const data = await res.json();
+          if (Array.isArray(data)) {
+            data.forEach(t => {
+              allPrices[t.symbol] = {
+                price: parseFloat(t.lastPrice),
+                change: parseFloat(t.priceChangePercent)
+              };
+            });
+          }
+        } catch (_) { /* ignore */ }
+      }
+
+      // Gold via PAXGUSDT
+      if (favorites.includes('XAUUSD') && !allPrices['XAUUSD']) {
+        try {
+          const res  = await fetch('https://api.binance.com/api/v3/ticker/24hr?symbol=PAXGUSDT');
+          const data = await res.json();
+          allPrices['XAUUSD'] = {
+            price: parseFloat(data.lastPrice),
+            change: parseFloat(data.priceChangePercent)
           };
-        });
-        
-        // Map PAXGUSDT to XAUUSD
-        if (allPrices.PAXGUSDT) {
-          allPrices.XAUUSD = allPrices.PAXGUSDT;
-        }
+        } catch (_) { /* ignore */ }
       }
 
-      // Fetch forex
-      const forexRes = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
-      const forexData = await forexRes.json();
-      
-      if (forexData.rates) {
-        allPrices.EURUSD = {
-          price: parseFloat((1 / forexData.rates.EUR).toFixed(5)),
-          change: 0
-        };
-        allPrices.GBPUSD = {
-          price: parseFloat((1 / forexData.rates.GBP).toFixed(5)),
-          change: 0
-        };
+      // Forex via ExchangeRate API
+      const forexSyms = favorites.filter(s =>
+        !s.endsWith('USDT') && s !== 'XAUUSD' && s !== 'XAGUSD'
+      );
+      if (forexSyms.length > 0) {
+        try {
+          const res  = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+          const data = await res.json();
+          if (data.rates) {
+            forexSyms.forEach(sym => {
+              const base  = sym.slice(0, 3);
+              const quote = sym.slice(3, 6);
+              let rate = null;
+              if (base === 'USD' && data.rates[quote]) {
+                rate = data.rates[quote];
+              } else if (quote === 'USD' && data.rates[base]) {
+                rate = 1 / data.rates[base];
+              } else if (data.rates[base] && data.rates[quote]) {
+                rate = data.rates[quote] / data.rates[base];
+              }
+              if (rate) {
+                allPrices[sym] = { price: parseFloat(rate.toFixed(5)), change: 0 };
+              }
+            });
+          }
+        } catch (_) { /* ignore */ }
       }
 
-      // Update favorites
-      const favMarkets = favorites
-        .map(symbol => ({
-          symbol,
-          data: allPrices[symbol]
-        }))
-        .filter(m => m.data);
-
-      setMarkets(favMarkets);
-      setLoading(false);
-    } catch (error) {
-      console.error('Failed to load markets:', error);
+      setMarkets(
+        favorites
+          .map(symbol => ({ symbol, data: allPrices[symbol] }))
+          .filter(m => m.data)
+      );
+    } catch (err) {
+      console.error('loadMarkets error:', err);
+    } finally {
       setLoading(false);
     }
   };
 
-  const removeFavorite = (symbol) => {
-    setFavorites(favorites.filter(s => s !== symbol));
-  };
-
-  const addFavorite = (symbol) => {
-    if (!favorites.includes(symbol)) {
-      setFavorites([...favorites, symbol]);
-    }
-  };
-
+  // ─── Generate signal for a symbol (ONE API CALL) ──────────
   const handleGenerateSignal = async (symbol) => {
     setGeneratingSignal(symbol);
     setError(null);
 
     try {
-      // Check access first
-      const accessCheck = await signalService.checkAccess();
-      if (!accessCheck.success || !accessCheck.data.canGenerate) {
-        setError('Cannot generate signal - trial limit or subscription required');
+      // 1. Check access (trial / subscription)
+      let canGenerate = true;
+      try {
+        const accessCheck = await signalService.checkAccess();
+        canGenerate = accessCheck?.data?.canGenerate !== false;
+      } catch (accessErr) {
+        // If check-access fails (e.g. 401), still try analysis
+        console.warn('Access check failed:', accessErr.message);
+      }
+
+      if (!canGenerate) {
+        setError('Trial limit reached — please upgrade your plan.');
         setGeneratingSignal(null);
         return;
       }
 
-      // Get market data
-      const marketResponse = await marketService.getMarketSeries(symbol, '1h', 120);
-      if (!marketResponse.success) {
-        throw new Error('Failed to fetch market data');
+      // 2. Track the generation (for trial counting)
+      try {
+        await signalService.generate({ symbol, timeframe: 'H1', signalType: 'MARKET_FEED' });
+      } catch (trackErr) {
+        // If trial-limit error, surface it
+        if (trackErr.response?.data?.error === 'TRIAL_LIMIT_EXCEEDED') {
+          setError(trackErr.response.data.message || 'Trial limit exceeded.');
+          setGeneratingSignal(null);
+          return;
+        }
+        console.warn('Signal tracking failed:', trackErr.message);
       }
 
-      const klines = marketResponse.data.candles;
-      
-      // Analyze with SMC
-      const analysisResponse = await analysisService.analyzeSMC(klines);
-      if (!analysisResponse.success) {
-        throw new Error('Analysis failed');
+      // 3. Run full analysis (one call does everything)
+      const result = await analysisService.getFullAnalysis(symbol, '1h');
+
+      if (!result.success || !result.data) {
+        throw new Error(result.message || 'Analysis returned no data');
       }
 
-      const analysis = analysisResponse.data;
+      const d   = result.data;
+      const sig = d.signal;
 
-      // Generate signal
-      const signalResponse = await analysisService.generateSignal(
-        analysis,
-        analysis.currentPrice,
-        symbol,
-        'H1'
-      );
-
-      if (!signalResponse.success) {
-        throw new Error('Signal generation failed');
+      if (!sig) {
+        throw new Error('No signal generated');
       }
 
       const generatedSignal = {
-        direction: signalResponse.data.signal,
-        confidence: signalResponse.data.confidence,
-        entry: signalResponse.data.entry,
-        sl: signalResponse.data.stopLoss,
-        tp1: signalResponse.data.takeProfit,
-        rr: signalResponse.data.riskReward,
-        timestamp: new Date().toISOString()
+        direction:  sig.direction || 'WAIT',
+        confidence: sig.confidence || d.confluence?.confidence || 0,
+        entry:      sig.entry || d.currentPrice || 0,
+        sl:         sig.stopLoss || 0,
+        tp1:        sig.tp1 || 0,
+        tp2:        sig.tp2 || 0,
+        tp3:        sig.tp3 || 0,
+        rr:         sig.rr || '0.00',
+        reason:     sig.reason || '',
+        timestamp:  new Date().toISOString()
       };
 
       setSignals(prev => ({ ...prev, [symbol]: generatedSignal }));
-      
+
       if (onSignalGenerated) {
         onSignalGenerated(symbol, generatedSignal);
       }
 
-      console.log(`✓ Signal generated for ${symbol}:`, generatedSignal);
+      console.log(`✅ Signal for ${symbol}:`, generatedSignal);
+
     } catch (err) {
-      console.error(`✗ Signal generation error for ${symbol}:`, err);
+      console.error(`❌ Signal error for ${symbol}:`, err);
       setError(err.message || 'Failed to generate signal');
       setSignals(prev => ({ ...prev, [symbol]: { error: err.message } }));
     } finally {
@@ -152,27 +175,30 @@ export default function MarketFeed({ onSignalGenerated }) {
     }
   };
 
+  const removeFavorite = (symbol) => {
+    setFavorites(prev => prev.filter(s => s !== symbol));
+  };
+
+  // ─── Render ───────────────────────────────────────────────
   return (
     <div className="bg-black-light rounded-xl p-6">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold flex items-center gap-2">
           <svg className="w-5 h-5 text-yellow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
           </svg>
           Live Market Data
         </h2>
-        <button
-          onClick={() => setFavorites([...favorites, 'NEW'])}
-          className="text-xs bg-yellow text-black px-2 py-1 rounded hover:bg-yellow-light transition"
-        >
-          + Add Pair
-        </button>
+        <div className="text-xs text-gray-500">
+          Click any pair to generate signal
+        </div>
       </div>
 
       {loading ? (
         <div className="flex items-center justify-center py-4">
           <div className="spinner"></div>
-          <span className="text-xs text-gray-400 ml-2">Loading markets...</span>
+          <span className="text-xs text-gray-400 ml-2">Loading markets…</span>
         </div>
       ) : (
         <>
@@ -182,12 +208,12 @@ export default function MarketFeed({ onSignalGenerated }) {
               <span>{error}</span>
             </div>
           )}
-          
+
           <div className="space-y-2 scrollbar-custom max-h-96 overflow-y-auto">
             {markets.map(market => {
-              const signal = signals[market.symbol];
+              const signal     = signals[market.symbol];
               const isPositive = market.data.change >= 0;
-              
+
               return (
                 <div
                   key={market.symbol}
@@ -195,78 +221,92 @@ export default function MarketFeed({ onSignalGenerated }) {
                   onClick={() => handleGenerateSignal(market.symbol)}
                 >
                   <div className="flex items-center justify-between">
-                    {/* Left: Symbol & Price */}
+                    {/* Symbol */}
                     <div className="flex-1 flex items-center gap-3">
                       <div className="w-10 h-10 bg-yellow/10 rounded-lg flex items-center justify-center text-yellow text-lg font-bold group-hover:bg-yellow/20 transition">
                         {getSymbolIcon(market.symbol)}
                       </div>
                       <div>
-                        <p className="font-bold text-white">{market.symbol.replace('USDT', '').replace('USD', '')}</p>
+                        <p className="font-bold text-white">
+                          {market.symbol.replace('USDT', '').replace('USD', '')}
+                        </p>
                         <p className="text-xs text-gray-400">{market.symbol}</p>
                       </div>
                     </div>
 
-                    {/* Center: Price & Change */}
+                    {/* Price */}
                     <div className="flex-1 text-center">
-                      <p className="text-lg font-mono font-bold text-yellow">${formatPrice(market.data.price)}</p>
-                      <p className={`text-sm font-semibold flex items-center justify-center gap-1 ${isPositive ? 'text-green' : 'text-red'}`}>
+                      <p className="text-lg font-mono font-bold text-yellow">
+                        ${fmtPrice(market.data.price)}
+                      </p>
+                      <p className={`text-sm font-semibold flex items-center justify-center gap-1 ${
+                        isPositive ? 'text-green' : 'text-red'
+                      }`}>
                         {isPositive ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
                         {isPositive ? '+' : ''}{market.data.change.toFixed(2)}%
                       </p>
                     </div>
 
-                    {/* Right: Signal & Controls */}
+                    {/* Signal status */}
                     <div className="flex-1 flex flex-col items-end gap-2">
                       {generatingSignal === market.symbol ? (
                         <div className="flex items-center gap-2">
-                          <div className="w-4 h-4 border-2 border-yellow/30 border-t-yellow rounded-full animate-spin"></div>
-                          <span className="text-xs text-gray-400">Analyzing...</span>
+                          <div className="w-4 h-4 border-2 border-yellow/30 border-t-yellow rounded-full animate-spin" />
+                          <span className="text-xs text-gray-400">Analyzing…</span>
                         </div>
                       ) : signal && !signal.error ? (
                         <div className="flex items-center gap-2">
                           <div className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 ${
-                            signal.direction === 'BUY' ? 'bg-green/20 text-green' :
+                            signal.direction === 'BUY'  ? 'bg-green/20 text-green' :
                             signal.direction === 'SELL' ? 'bg-red/20 text-red' :
-                            'bg-gray/20 text-gray'
+                            'bg-gray-800 text-gray-400'
                           }`}>
                             <Zap size={12} />
                             {signal.direction}
                           </div>
                           <span className="text-xs text-gray-500">{signal.confidence}%</span>
                         </div>
+                      ) : signal?.error ? (
+                        <span className="text-xs text-red">Error</span>
                       ) : null}
-                      
+
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeFavorite(market.symbol);
-                        }}
+                        onClick={(e) => { e.stopPropagation(); removeFavorite(market.symbol); }}
                         className="text-gray-400 hover:text-red transition text-sm"
-                      >
-                        ✕
-                      </button>
+                      >✕</button>
                     </div>
                   </div>
 
-                  {/* Signal Details Expanded */}
-                  {signal && !signal.error && (
+                  {/* Expanded signal details */}
+                  {signal && !signal.error && signal.direction !== 'WAIT' && (
                     <div className="mt-3 pt-3 border-t border-gray-700 grid grid-cols-4 gap-2 text-xs">
                       <div className="text-center">
                         <p className="text-gray-500">Entry</p>
-                        <p className="font-mono font-bold text-green">${formatPrice(signal.entry)}</p>
+                        <p className="font-mono font-bold text-green">${fmtPrice(signal.entry)}</p>
                       </div>
                       <div className="text-center">
                         <p className="text-gray-500">S/L</p>
-                        <p className="font-mono font-bold text-red">${formatPrice(signal.sl)}</p>
+                        <p className="font-mono font-bold text-red">${fmtPrice(signal.sl)}</p>
                       </div>
                       <div className="text-center">
                         <p className="text-gray-500">T/P</p>
-                        <p className="font-mono font-bold text-green">${formatPrice(signal.tp1)}</p>
+                        <p className="font-mono font-bold text-green">${fmtPrice(signal.tp1)}</p>
                       </div>
                       <div className="text-center">
                         <p className="text-gray-500">R:R</p>
-                        <p className="font-mono font-bold text-yellow">{signal.rr?.toFixed(2) || 'N/A'}</p>
+                        <p className="font-mono font-bold text-yellow">
+                          {typeof signal.rr === 'number' ? signal.rr.toFixed(2) : signal.rr || 'N/A'}
+                        </p>
                       </div>
+                    </div>
+                  )}
+
+                  {/* WAIT signal with reason */}
+                  {signal && !signal.error && signal.direction === 'WAIT' && (
+                    <div className="mt-3 pt-3 border-t border-gray-700">
+                      <p className="text-xs text-gray-500 text-center">
+                        ⏸ No clear setup — {signal.reason || 'wait for better confluence'}
+                      </p>
                     </div>
                   )}
                 </div>
@@ -279,24 +319,21 @@ export default function MarketFeed({ onSignalGenerated }) {
   );
 }
 
+// ─── Helpers ────────────────────────────────────────────────
 function getSymbolIcon(symbol) {
   const icons = {
-    'BTCUSDT': '₿',
-    'ETHUSDT': 'Ξ',
-    'BNBUSDT': 'B',
-    'SOLUSDT': '◎',
-    'EURUSD': '€',
-    'GBPUSD': '£',
-    'USDJPY': '¥',
-    'AUDUSD': 'A',
-    'XAUUSD': '🥇',
-    'XAGUSD': '🥈',
+    BTCUSDT: '₿', ETHUSDT: 'Ξ', BNBUSDT: 'B', SOLUSDT: '◎',
+    XRPUSDT: 'X', ADAUSDT: 'A', DOGEUSDT: 'Ð',
+    EURUSD: '€', GBPUSD: '£', USDJPY: '¥', AUDUSD: 'A$',
+    USDCHF: 'Fr', NZDUSD: 'NZ', USDCAD: 'C$',
+    XAUUSD: '🥇', XAGUSD: '🥈'
   };
   return icons[symbol] || '○';
 }
 
-function formatPrice(price) {
+function fmtPrice(price) {
+  if (price == null || isNaN(price)) return '—';
   if (price >= 1000) return price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  if (price >= 1) return price.toFixed(4);
+  if (price >= 1)    return price.toFixed(4);
   return price.toFixed(6);
 }

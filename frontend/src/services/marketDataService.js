@@ -1,6 +1,7 @@
 /**
  * Market Data Service
  * Handles real-time market data fetching from both Binance and ExchangeRate APIs
+ * via the backend proxy routes.
  */
 
 class MarketDataService {
@@ -21,7 +22,7 @@ class MarketDataService {
     const s = this.normalizeSymbolKey(symbolKey);
     if (!s) return 'N/A';
     if (s === 'XAUUSD') return 'XAU/USD';
-    if (s === 'XAGUUSD') return 'XAG/USD';
+    if (s === 'XAGUSD') return 'XAG/USD';
     if (s.endsWith('USDT')) return s.replace('USDT', '') + '/USDT';
     if (s.length === 6) return s.slice(0, 3) + '/' + s.slice(3);
     return s;
@@ -75,48 +76,53 @@ class MarketDataService {
     return { crypto, forex };
   }
 
-  // Get market series (OHLCV candles)
-  async getMarketSeries(symbol, timeframe = 'H1', limit = 120) {
-    try {
-      // Normalize timeframe format
-      const normalizedTimeframe = this.normalizeTimeframe(timeframe);
-
-      const params = new URLSearchParams({
-        symbol: this.normalizeSymbolKey(symbol),
-        timeframe: normalizedTimeframe,
-        limit: Math.min(limit, 1000)
-      });
-
-      const response = await fetch(`/api/market/series?${params}`);
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to fetch market series');
-      }
-
-      return data.data.candles;
-    } catch (error) {
-      console.error('Market series error:', error);
-      return [];
-    }
-  }
-
   // Normalize timeframe format (H1 → 1h, H4 → 4h, D1 → 1d, M5 → 5m, etc)
   normalizeTimeframe(tf) {
     if (typeof tf !== 'string') return '1h';
     const upperTf = tf.toUpperCase();
-    // Already normalized
     if (['1M', '5M', '15M', '30M', '1H', '4H', '1D', '1W'].includes(upperTf)) return upperTf.toLowerCase();
-    // Convert format
     return upperTf
-      .replace('H1', '1h')
-      .replace('H4', '4h')
-      .replace('D1', '1d')
-      .replace('M30', '30m')
-      .replace('M15', '15m')
-      .replace('M5', '5m')
-      .replace('M1', '1m')
-      .replace('W1', '1w');
+      .replace('H1', '1h').replace('H4', '4h').replace('D1', '1d')
+      .replace('M30', '30m').replace('M15', '15m').replace('M5', '5m')
+      .replace('M1', '1m').replace('W1', '1w');
+  }
+
+  /**
+   * Get market series (OHLCV candles) from backend.
+   * The backend /api/market/series now correctly handles:
+   *   - Crypto symbols → Binance
+   *   - Forex symbols (EURUSD, GBPUSD, etc) → ExchangeRate API
+   *   - Gold (XAUUSD) → PAXG on Binance
+   * 
+   * Returns array of candle objects: { time, open, high, low, close, volume }
+   * Throws on failure so caller can catch and handle.
+   */
+  async getMarketSeries(symbol, timeframe = 'H1', limit = 120) {
+    const normalizedSymbol = this.normalizeSymbolKey(symbol);
+    const normalizedTimeframe = this.normalizeTimeframe(timeframe);
+
+    const params = new URLSearchParams({
+      symbol: normalizedSymbol,
+      timeframe: normalizedTimeframe,
+      limit: Math.min(limit, 1000)
+    });
+
+    const response = await fetch(`/api/market/series?${params}`);
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      const errMsg = data.message || `Market series request failed with status ${response.status}`;
+      console.error(`Market series error for ${normalizedSymbol}:`, errMsg);
+      throw new Error(errMsg);
+    }
+
+    // Backend returns { success: true, data: { symbol, timeframe, candles: [...], count } }
+    const candles = data.data?.candles;
+    if (!Array.isArray(candles)) {
+      throw new Error('Failed to fetch market series');
+    }
+
+    return candles;
   }
 
   // Get batch snapshot for multiple symbols
@@ -157,6 +163,16 @@ class MarketDataService {
     const forexData = await this.getForexSnapshot();
     if (forexData[normalized]) {
       return forexData[normalized].price;
+    }
+
+    // Last resort: fetch series and use last close
+    try {
+      const candles = await this.getMarketSeries(symbol, 'H1', 1);
+      if (candles && candles.length > 0) {
+        return candles[candles.length - 1].close;
+      }
+    } catch (e) {
+      // ignore
     }
 
     return null;

@@ -27,7 +27,9 @@ import {
   Lock,
   Eye,
   Upload,
-  User
+  User,
+  Search,
+  X
 } from 'lucide-react';
 
 // ─── CONSTANTS ──────────────────────────────────────────────
@@ -43,29 +45,70 @@ function timeframeToInterval(tf) {
   return TF_TO_INTERVAL[tf] || '1h';
 }
 
-// ─── SHARED DATA HELPERS ────────────────────────────────────
+// ─── ALL MARKETS DATA (for market discovery) ──────────────────
+const ALL_MARKETS = [
+  // Forex
+  { symbol: 'EURUSD', name: 'EUR/USD', category: 'Forex', price: 1.0850, change: 0.15 },
+  { symbol: 'GBPUSD', name: 'GBP/USD', category: 'Forex', price: 1.2650, change: 0.10 },
+  { symbol: 'USDJPY', name: 'USD/JPY', category: 'Forex', price: 148.50, change: -0.20 },
+  { symbol: 'USDCHF', name: 'USD/CHF', category: 'Forex', price: 0.8850, change: 0.05 },
+  { symbol: 'AUDUSD', name: 'AUD/USD', category: 'Forex', price: 0.6550, change: 0.08 },
+  { symbol: 'NZDUSD', name: 'NZD/USD', category: 'Forex', price: 0.6050, change: 0.00 },
+  { symbol: 'USDCAD', name: 'USD/CAD', category: 'Forex', price: 1.3650, change: -0.05 },
+  { symbol: 'EURGBP', name: 'EUR/GBP', category: 'Forex', price: 0.8580, change: 0.03 },
+  { symbol: 'EURJPY', name: 'EUR/JPY', category: 'Forex', price: 161.50, change: -0.08 },
+  { symbol: 'GBPJPY', name: 'GBP/JPY', category: 'Forex', price: 193.80, change: 0.12 },
+  // Crypto
+  { symbol: 'BTCUSDT', name: 'Bitcoin', category: 'Crypto', price: 45280, change: 2.30 },
+  { symbol: 'ETHUSDT', name: 'Ethereum', category: 'Crypto', price: 2500, change: 1.80 },
+  { symbol: 'BNBUSDT', name: 'Binance Coin', category: 'Crypto', price: 600, change: 0.50 },
+  { symbol: 'SOLUSDT', name: 'Solana', category: 'Crypto', price: 180, change: 1.20 },
+  { symbol: 'XRPUSDT', name: 'Ripple', category: 'Crypto', price: 2.50, change: 0.80 },
+  { symbol: 'ADAUSDT', name: 'Cardano', category: 'Crypto', price: 1.20, change: -0.30 },
+  { symbol: 'DOGEUSDT', name: 'Dogecoin', category: 'Crypto', price: 0.40, change: 3.50 },
+  { symbol: 'AVAXUSDT', name: 'Avalanche', category: 'Crypto', price: 150, change: 2.10 },
+  { symbol: 'DOTUSDT', name: 'Polkadot', category: 'Crypto', price: 8.50, change: 0.70 },
+  { symbol: 'LINKUSDT', name: 'Chainlink', category: 'Crypto', price: 28, change: 1.30 },
+  // Metals
+  { symbol: 'XAUUSD', name: 'Gold', category: 'Metals', price: 2050, change: 0.20 },
+  { symbol: 'XAGUSD', name: 'Silver', category: 'Metals', price: 24, change: 0.15 }
+];
+
+// ─── SHARED DATA HELPERS (FIXED) ────────────────────────────
+//
+// Replace everything from "async function fetchMarketData"
+// through "async function fullSignalPipeline" with this block.
+// Keep all the constants, imports, OCR patterns, and components.
 
 /**
- * Fetch klines through YOUR backend proxy at /api/signals/klines/:symbol/:interval/:limit
- * The backend already validates & forwards to Binance, and returns raw Binance arrays.
- * We parse those arrays into { time, open, high, low, close, volume } objects.
+ * Fetch OHLCV candles via /api/market/series
+ * Returns array of { time, open, high, low, close, volume }
  */
 async function fetchMarketData(symbol, timeframe, limit = 120) {
   try {
     const interval = timeframeToInterval(timeframe);
-    const res = await fetch(`/api/signals/klines/${symbol}/${interval}/${limit}`);
+    const params = new URLSearchParams({
+      symbol: String(symbol).toUpperCase(),
+      timeframe: interval,
+      limit: String(limit)
+    });
+
+    const res = await fetch(`/api/market/series?${params}`);
     const result = await res.json();
 
-    // Backend wraps in { success, data } – data is the raw Binance array
-    const raw = result.success && Array.isArray(result.data) ? result.data : [];
+    // Backend returns { success, data: { candles: [...], source, count } }
+    if (!result.success || !result.data?.candles) {
+      console.warn('fetchMarketData: no candles in response', result.message || '');
+      return [];
+    }
 
-    return raw.map(k => ({
-      time:   k[0],
-      open:   parseFloat(k[1]),
-      high:   parseFloat(k[2]),
-      low:    parseFloat(k[3]),
-      close:  parseFloat(k[4]),
-      volume: parseFloat(k[5])
+    return result.data.candles.map(k => ({
+      time:   k.time,
+      open:   parseFloat(k.open),
+      high:   parseFloat(k.high),
+      low:    parseFloat(k.low),
+      close:  parseFloat(k.close),
+      volume: parseFloat(k.volume || 0)
     }));
   } catch (err) {
     console.error('fetchMarketData failed:', err);
@@ -74,8 +117,8 @@ async function fetchMarketData(symbol, timeframe, limit = 120) {
 }
 
 /**
- * Run full SMC analysis on the backend.
- * POST /api/analysis/analyze-smc  expects { klines: [...] }
+ * Run SMC analysis on klines via backend
+ * POST /api/analysis/analyze-smc { klines }
  */
 async function analyzeSMCBackend(klines) {
   try {
@@ -85,7 +128,9 @@ async function analyzeSMCBackend(klines) {
       body: JSON.stringify({ klines })
     });
     const data = await res.json();
-    return data.success ? data.data : null;
+    if (data.success && data.data) return data.data;
+    console.warn('analyzeSMCBackend unsuccessful:', data.message || '');
+    return null;
   } catch (err) {
     console.error('analyzeSMCBackend failed:', err);
     return null;
@@ -93,8 +138,8 @@ async function analyzeSMCBackend(klines) {
 }
 
 /**
- * Generate a signal on the backend.
- * POST /api/analysis/generate-signal  expects { analysis, currentPrice, symbol, timeframe }
+ * Generate signal from analysis result via backend
+ * POST /api/analysis/generate-signal
  */
 async function generateSignalBackend(analysis, currentPrice, symbol, timeframe) {
   try {
@@ -104,18 +149,23 @@ async function generateSignalBackend(analysis, currentPrice, symbol, timeframe) 
       body: JSON.stringify({ analysis, currentPrice, symbol, timeframe })
     });
     const data = await res.json();
-    return data.success ? data.data : null;
+    if (data.success && data.data) return data.data;
+    console.warn('generateSignalBackend unsuccessful:', data.message || '');
+    return null;
   } catch (err) {
     console.error('generateSignalBackend failed:', err);
     return null;
   }
 }
 
-// ─── LOCAL TA FALLBACK (when backend is unavailable) ────────
+// ─── LOCAL TA FALLBACK ──────────────────────────────────────
+
 function analyzeMarketDataLocally(klines) {
   if (!klines || klines.length === 0) {
-    return { currentPrice: 0, trend: 'NEUTRAL', bullishCandles: 0, bearishCandles: 0,
-             ema20: 0, ema50: 0, rsi: 50, support: 0, resistance: 0 };
+    return {
+      currentPrice: 0, trend: 'NEUTRAL', bullishCandles: 0, bearishCandles: 0,
+      ema20: 0, ema50: 0, rsi: 50, support: 0, resistance: 0
+    };
   }
 
   let bullishCandles = 0, bearishCandles = 0;
@@ -179,72 +229,145 @@ function buildSignalLocally(analysis, symbol, timeframe) {
   return sig;
 }
 
+// ─── MAIN SIGNAL PIPELINE ───────────────────────────────────
 /**
- * Full pipeline: fetch → backend SMC → backend signal → fallback if needed
+ * Full signal pipeline — used by SignalGenerator, OCRScanner, and MarketSearch.
+ * 
+ * Strategy:
+ *   1. Try all-in-one GET /api/analysis/analyze/:symbol/:timeframe  (1 call)
+ *   2. Fallback: fetch klines → POST analyze-smc → POST generate-signal (3 calls)
+ *   3. Final fallback: local TA calculation
  */
 async function fullSignalPipeline(symbol, timeframe) {
-  const klines = await fetchMarketData(symbol, timeframe, 120);
-  if (!klines || klines.length < 5) {
-    console.warn('Insufficient kline data, using empty signal');
-    return { direction: 'WAIT', confidence: 0, entry: 0, sl: 0, tp1: 0, tp2: 0, tp3: 0, rr: '0.00', symbol, timeframe };
+  const normalizedTF = timeframeToInterval(timeframe);
+
+  // ── STRATEGY 1: All-in-one endpoint ──
+  try {
+    const res = await fetch(`/api/analysis/analyze/${symbol}/${normalizedTF}?limit=120`);
+    const result = await res.json();
+
+    if (result.success && result.data?.signal) {
+      const d   = result.data;
+      const sig = d.signal;
+
+      return {
+        direction:  sig.direction || 'WAIT',
+        confidence: sig.confidence || d.confluence?.confidence || 0,
+        entry:      sig.entry || d.currentPrice,
+        sl:         sig.stopLoss || 0,
+        tp1:        sig.tp1 || 0,
+        tp2:        sig.tp2 || 0,
+        tp3:        sig.tp3 || 0,
+        rr:         String(sig.rr || '0.00'),
+        reason:     sig.reason || '',
+        symbol,
+        timeframe,
+        analysis: {
+          currentPrice: d.currentPrice,
+          rsi:   d.indicators?.rsi != null ? Math.round(d.indicators.rsi) : 50,
+          ema20: d.indicators?.ema20 || 0,
+          ema50: d.indicators?.ema50 || 0,
+          support:    d.supportResistance?.support || d.indicators?.support || 0,
+          resistance: d.supportResistance?.resistance || d.indicators?.resistance || 0
+        },
+        smc:        d.smc || null,
+        confluence: d.confluence || null,
+        timestamp:  new Date().toLocaleTimeString()
+      };
+    }
+    console.warn('All-in-one analysis: no signal in response');
+  } catch (err) {
+    console.warn('All-in-one analysis failed:', err.message);
   }
 
-  // Try backend SMC + signal
+  // ── STRATEGY 2: Three-step pipeline ──
+  const klines = await fetchMarketData(symbol, timeframe, 120);
+
+  if (!klines || klines.length < 5) {
+    console.warn('Insufficient kline data — returning empty signal');
+    return {
+      direction: 'WAIT', confidence: 0,
+      entry: 0, sl: 0, tp1: 0, tp2: 0, tp3: 0,
+      rr: '0.00', symbol, timeframe,
+      reason: 'No market data available'
+    };
+  }
+
   const smcAnalysis = await analyzeSMCBackend(klines);
+
   if (smcAnalysis) {
     const currentPrice = klines[klines.length - 1].close;
     const backendSignal = await generateSignalBackend(smcAnalysis, currentPrice, symbol, timeframe);
+
     if (backendSignal) {
-      // Normalise backend response shape to match what SignalDisplay expects
       return {
-        direction:  backendSignal.signal || 'WAIT',
+        direction:  backendSignal.signal || backendSignal.direction || 'WAIT',
         confidence: backendSignal.confidence || 50,
         entry:      backendSignal.entry || currentPrice,
-        sl:         backendSignal.stopLoss || 0,
-        tp1:        backendSignal.takeProfit || 0,
-        tp2:        backendSignal.takeProfit || 0,
-        tp3:        backendSignal.takeProfit || 0,
-        rr:         String(backendSignal.riskReward || '0.00'),
+        sl:         backendSignal.sl ?? backendSignal.stopLoss ?? 0,
+        tp1:        backendSignal.tp1 ?? 0,
+        tp2:        backendSignal.tp2 ?? 0,
+        tp3:        backendSignal.tp3 ?? 0,
+        rr:         String(backendSignal.rr || backendSignal.riskReward || '0.00'),
         reason:     backendSignal.reason || '',
         symbol,
-        timeframe
+        timeframe,
+        analysis: {
+          currentPrice: smcAnalysis.currentPrice || currentPrice,
+          rsi:   smcAnalysis.rsi != null ? Math.round(smcAnalysis.rsi) : (smcAnalysis.indicators?.rsi != null ? Math.round(smcAnalysis.indicators.rsi) : 50),
+          ema20: smcAnalysis.ema20 ?? smcAnalysis.indicators?.ema20 ?? 0,
+          ema50: smcAnalysis.ema50 ?? smcAnalysis.indicators?.ema50 ?? 0,
+          support:    smcAnalysis.supportResistance?.support ?? 0,
+          resistance: smcAnalysis.supportResistance?.resistance ?? 0
+        },
+        smc:        smcAnalysis.smc || null,
+        confluence: backendSignal.confluence || null,
+        timestamp:  new Date().toLocaleTimeString()
       };
     }
   }
 
-  // Fallback: local analysis
-  console.warn('Backend analysis unavailable – falling back to local TA');
+  // ── STRATEGY 3: Local TA fallback ──
+  console.warn('Backend analysis unavailable — falling back to local TA');
   const localAnalysis = analyzeMarketDataLocally(klines);
-  return buildSignalLocally(localAnalysis, symbol, timeframe);
+  const localSignal   = buildSignalLocally(localAnalysis, symbol, timeframe);
+  localSignal.analysis = {
+    currentPrice: localAnalysis.currentPrice,
+    rsi:          Math.round(localAnalysis.rsi),
+    ema20:        localAnalysis.ema20,
+    ema50:        localAnalysis.ema50,
+    support:      localAnalysis.support,
+    resistance:   localAnalysis.resistance
+  };
+  localSignal.timestamp = new Date().toLocaleTimeString();
+  return localSignal;
 }
 
 // ─── OCR SYMBOL DETECTION ───────────────────────────────────
 const SYMBOL_PATTERNS = {
-  crypto: /\b(BTC|ETH|BNB|SOL|XRP|DOGE|ADA|DOT|MATIC|LINK|AVAX|SHIB|UNI|ATOM|LTC)(\/|USD|USDT|BUSD)?\b/gi,
-  forex:  /\b(EUR|GBP|USD|JPY|CHF|AUD|NZD|CAD)(\/|-|)(USD|EUR|GBP|JPY|CHF|AUD|NZD|CAD)\b/gi,
-  gold:   /\b(XAU|GOLD|XAUUSD)\b/gi,
-  timeframes: /\b(M1|M5|M15|M30|H1|H4|D1|W1|MN|1m|5m|15m|30m|1h|4h|1d|1w)\b/gi
+  crypto:     new RegExp('\b(BTC|ETH|BNB|SOL|XRP|DOGE|ADA|DOT|MATIC|LINK|AVAX|SHIB|UNI|ATOM|LTC)(/|USD|USDT|BUSD)?\b', 'gi'),
+  forex:      new RegExp('\b(EUR|GBP|USD|JPY|CHF|AUD|NZD|CAD)(/|-|)(USD|EUR|GBP|JPY|CHF|AUD|NZD|CAD)\b', 'gi'),
+  gold:       new RegExp('\b(XAU|GOLD|XAUUSD)\b', 'gi'),
+  timeframes: new RegExp('\b(M1|M5|M15|M30|H1|H4|D1|W1|MN|1m|5m|15m|30m|1h|4h|1d|1w)\b', 'gi')
 };
 
 function parseOCRText(text) {
   const upper = (text || '').toUpperCase();
   let symbol = null, timeframe = 'H1';
 
-  // Detect symbol
   for (const [type, pattern] of Object.entries(SYMBOL_PATTERNS)) {
     if (type === 'timeframes') continue;
     const m = upper.match(pattern);
     if (m && m.length > 0) {
-      let s = m[0].replace(/[\/\-]/g, '');
+      let s = m[0].replace(/[/\-]/g, '');
       if (type === 'crypto' && !s.includes('USDT') && !s.includes('USD')) s += 'USDT';
       if (type === 'gold') s = 'XAUUSD';
-      if (type === 'forex' && s.length === 6) s = s.slice(0,3) + s.slice(3); // keep normalised
+      if (type === 'forex' && s.length === 6) s = s.slice(0,3) + s.slice(3);
       symbol = s;
       break;
     }
   }
 
-  // Detect timeframe
   const tfMatch = upper.match(SYMBOL_PATTERNS.timeframes);
   if (tfMatch) {
     let tf = tfMatch[0].toUpperCase();
@@ -256,7 +379,7 @@ function parseOCRText(text) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// MAIN PAGE COMPONENT
+// MAIN PAGE COMPONENT (EXISTING STRUCTURE PRESERVED)
 // ═══════════════════════════════════════════════════════════
 export default function TradingDashboard() {
   const [canGenerate, setCanGenerate]           = useState(false);
@@ -264,6 +387,7 @@ export default function TradingDashboard() {
   const [loading, setLoading]                   = useState(true);
   const [error, setError]                       = useState(null);
   const [selectedSignal, setSelectedSignal]     = useState(null);
+  const [showMarketSearch, setShowMarketSearch] = useState(false);
   const navigate                                = useNavigate();
   const { user, logout }                        = useAuth();
   const { connectionStatus }                    = useMarket();
@@ -341,10 +465,10 @@ export default function TradingDashboard() {
     );
   }
 
-  // ── Main render ──
+  // ── Main render (EXISTING STRUCTURE) ──
   return (
     <div className="min-h-screen bg-black">
-      {/* ─ HEADER ─ */}
+      {/* ─ HEADER (ENHANCED WITH MARKET SEARCH) ─ */}
       <div className="fixed top-0 w-full bg-black-light border-b border-gray-800 z-40 px-6 py-3">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <div className="flex items-center space-x-6">
@@ -372,6 +496,15 @@ export default function TradingDashboard() {
                   </span>
                 </div>
               )}
+
+              {/* NEW: Quick Market Search Button */}
+              <button
+                onClick={() => setShowMarketSearch(true)}
+                className="text-gray-400 hover:text-yellow transition p-1.5 rounded border border-gray-800 hover:border-yellow"
+                title="Quick market search"
+              >
+                <Search className="w-4 h-4" />
+              </button>
             </div>
           )}
 
@@ -396,7 +529,7 @@ export default function TradingDashboard() {
         </div>
       </div>
 
-      {/* ─ MAIN CONTENT ─ */}
+      {/* ─ MAIN CONTENT (EXISTING STRUCTURE) ─ */}
       <main className="pt-16 max-w-7xl mx-auto px-6 py-6">
         <div className="grid lg:grid-cols-3 gap-6">
           {/* Left 2/3 */}
@@ -424,12 +557,149 @@ export default function TradingDashboard() {
           onClose={() => setSelectedSignal(null)}
         />
       )}
+
+      {/* Market Search Modal (NEW - INTEGRATED INTERNALLY) */}
+      {showMarketSearch && (
+        <QuickMarketSearch
+          onClose={() => setShowMarketSearch(false)}
+          onSelectMarket={(market) => {
+            setShowMarketSearch(false);
+            // Generate signal for selected market
+            handleGenerateSignalForMarket(market);
+          }}
+        />
+      )}
+    </div>
+  );
+
+  // ── Internal function to generate signal for market ──
+  async function handleGenerateSignalForMarket(market) {
+    const allowed = await handleSignalGeneration({ 
+      symbol: market.symbol, 
+      timeframe: 'H1', 
+      signalType: 'MARKET_SEARCH' 
+    });
+    if (!allowed) return;
+
+    try {
+      const signal = await fullSignalPipeline(market.symbol, 'H1');
+      setSelectedSignal(signal);
+    } catch (err) {
+      console.error('Failed to generate signal:', err);
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// QUICK MARKET SEARCH MODAL (NEW - LIGHT OVERLAY)
+// ═══════════════════════════════════════════════════════════
+function QuickMarketSearch({ onClose, onSelectMarket }) {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('ALL');
+  const [generatingSignal, setGeneratingSignal] = useState(null);
+
+  const categories = [
+    { key: 'ALL', label: 'All', icon: '🌍' },
+    { key: 'Forex', label: 'Forex', icon: '💱' },
+    { key: 'Crypto', label: 'Crypto', icon: '₿' },
+    { key: 'Metals', label: 'Metals', icon: '🥇' }
+  ];
+
+  const filtered = ALL_MARKETS
+    .filter(m => (selectedCategory === 'ALL' || m.category === selectedCategory) &&
+                  (m.name.toUpperCase().includes(searchQuery.toUpperCase()) || 
+                   m.symbol.toUpperCase().includes(searchQuery.toUpperCase())))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-start justify-center z-50 pt-20 p-4">
+      <div className="bg-black-light rounded-lg border border-gray-800 w-full max-w-2xl max-h-[70vh] overflow-hidden flex flex-col shadow-2xl">
+        {/* Header */}
+        <div className="border-b border-gray-800 p-4 flex justify-between items-center bg-black">
+          <h3 className="text-sm font-bold text-white">Quick Market Search</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-white transition">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Search & Filter */}
+        <div className="border-b border-gray-800 p-4 bg-black space-y-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-600" />
+            <input
+              type="text"
+              placeholder="Search pairs (BTC, EUR/USD, Gold...)"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              autoFocus
+              className="w-full bg-gray-900 border border-gray-800 text-white pl-9 pr-3 py-2 rounded text-sm focus:border-yellow outline-none transition"
+            />
+          </div>
+
+          <div className="flex gap-2 flex-wrap">
+            {categories.map(cat => (
+              <button
+                key={cat.key}
+                onClick={() => setSelectedCategory(cat.key)}
+                className={`px-3 py-1 text-xs font-semibold rounded border transition ${
+                  selectedCategory === cat.key
+                    ? 'bg-yellow text-black border-yellow'
+                    : 'border-gray-800 text-gray-400 hover:border-gray-600'
+                }`}
+              >
+                {cat.icon} {cat.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Markets List */}
+        <div className="overflow-y-auto flex-1">
+          {filtered.length === 0 ? (
+            <div className="p-6 text-center text-gray-500 text-sm">
+              No markets found
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-800">
+              {filtered.map(market => (
+                <div
+                  key={market.symbol}
+                  className="bg-black hover:bg-gray-900 transition p-4 flex items-center justify-between cursor-pointer group"
+                  onClick={() => onSelectMarket(market)}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-white">{market.name}</div>
+                    <div className="text-xs text-gray-500">{market.symbol} • {market.category}</div>
+                  </div>
+
+                  <div className="text-right ml-4">
+                    <div className="text-sm font-bold text-yellow font-mono">${formatPrice(market.price)}</div>
+                    <div className={`text-xs font-semibold ${market.change >= 0 ? 'text-green' : 'text-red'}`}>
+                      {market.change >= 0 ? '↑' : '↓'} {Math.abs(market.change).toFixed(2)}%
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectMarket(market);
+                    }}
+                    className="ml-4 px-3 py-1.5 text-xs font-semibold bg-yellow text-black rounded hover:bg-yellow/90 transition whitespace-nowrap opacity-0 group-hover:opacity-100"
+                  >
+                    Signal
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
 
 // ═══════════════════════════════════════════════════════════
-// SIGNAL GENERATOR
+// SIGNAL GENERATOR (EXISTING)
 // ═══════════════════════════════════════════════════════════
 function SignalGenerator({ onSignalGeneration }) {
   const [symbol, setSymbol]       = useState('BTCUSDT');
@@ -438,12 +708,11 @@ function SignalGenerator({ onSignalGeneration }) {
   const [signal, setSignal]       = useState(null);
 
   const handleGenerate = async () => {
-    // 1. Gate: check trial / subscription
     const allowed = await onSignalGeneration({ symbol, timeframe, signalType: 'LIVE_ANALYSIS' });
     if (!allowed) return;
 
     setLoading(true);
-    setSignal(null); // clear stale signal before fetch
+    setSignal(null);
     try {
       const result = await fullSignalPipeline(symbol, timeframe);
       setSignal(result);
@@ -483,14 +752,13 @@ function SignalGenerator({ onSignalGeneration }) {
         {loading ? 'Analyzing…' : 'Generate Signal'}
       </button>
 
-      {/* Only render SignalDisplay when we actually have a signal with an entry price */}
       {signal && signal.entry != null && <SignalDisplay signal={signal} />}
     </div>
   );
 }
 
 // ═══════════════════════════════════════════════════════════
-// OCR SCANNER
+// OCR SCANNER (EXISTING)
 // ═══════════════════════════════════════════════════════════
 function OCRScanner({ onSignalGeneration }) {
   const [loading, setLoading]   = useState(false);
@@ -500,22 +768,14 @@ function OCRScanner({ onSignalGeneration }) {
   const handleFileSelect = async (file) => {
     if (!file) return;
 
-    // 1. Gate
     const allowed = await onSignalGeneration({ symbol: 'OCR_SCAN', timeframe: 'AUTO', signalType: 'OCR_ANALYSIS' });
     if (!allowed) return;
 
     setLoading(true);
     setSignal(null);
     try {
-      // 2. OCR
       const { data } = await Tesseract.recognize(file, 'eng');
-      console.log('OCR text:', data.text);
-
-      // 3. Parse symbol + timeframe from OCR output
       const { symbol, timeframe } = parseOCRText(data.text);
-      console.log('Detected symbol:', symbol, 'timeframe:', timeframe);
-
-      // 4. Run the full pipeline with the detected symbol
       const result = await fullSignalPipeline(symbol, timeframe);
       setSignal(result);
     } catch (err) {
@@ -543,7 +803,7 @@ function OCRScanner({ onSignalGeneration }) {
         {loading ? (
           <div className="flex flex-col items-center">
             <div className="spinner mb-4"></div>
-            <p className="text-sm text-gray-400">Extracting text & analysing market structure…</p>
+            <p className="text-sm text-gray-400">Extracting text & analysing…</p>
           </div>
         ) : (
           <>
@@ -560,7 +820,7 @@ function OCRScanner({ onSignalGeneration }) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// LIVE CHART  –  re-fetches real klines when symbol changes
+// LIVE CHART (EXISTING)
 // ═══════════════════════════════════════════════════════════
 function LiveChart() {
   const canvasRef = useRef(null);
@@ -575,13 +835,11 @@ function LiveChart() {
     const labels = klines.map(k => new Date(k.time).toLocaleTimeString());
 
     if (chartRef.current) {
-      // Update existing chart
       chartRef.current.data.labels = labels;
       chartRef.current.data.datasets[0].data = closes;
       chartRef.current.data.datasets[0].label = sym;
       chartRef.current.update();
     } else {
-      // Create new chart
       const ctx = canvasRef.current.getContext('2d');
       chartRef.current = new Chart(ctx, {
         type: 'line',
@@ -615,10 +873,8 @@ function LiveChart() {
     }
   }, []);
 
-  // Initial load + reload when symbol changes
   useEffect(() => { loadChart(symbol); }, [symbol, loadChart]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (chartRef.current) {
@@ -631,7 +887,7 @@ function LiveChart() {
   const TICKERS = [
     { label: 'BTC',  sym: 'BTCUSDT' },
     { label: 'ETH',  sym: 'ETHUSDT' },
-    { label: 'XAU',  sym: 'XAUUSD' }   // Note: XAUUSD won't have Binance klines – backend will 404; chart stays as-is
+    { label: 'XAU',  sym: 'XAUUSD' }
   ];
 
   return (
@@ -660,7 +916,7 @@ function LiveChart() {
 }
 
 // ═══════════════════════════════════════════════════════════
-// RISK SETTINGS
+// RISK SETTINGS (EXISTING)
 // ═══════════════════════════════════════════════════════════
 function RiskSettings() {
   const [risk, setRisk]   = useState(2);
@@ -694,7 +950,7 @@ function RiskSettings() {
 }
 
 // ═══════════════════════════════════════════════════════════
-// SYSTEM STATUS
+// SYSTEM STATUS (EXISTING)
 // ═══════════════════════════════════════════════════════════
 function SystemStatus() {
   return (
@@ -720,10 +976,9 @@ function SystemStatus() {
 }
 
 // ═══════════════════════════════════════════════════════════
-// SIGNAL DISPLAY  –  guarded: only renders when signal.entry is a number
+// SIGNAL DISPLAY (EXISTING)
 // ═══════════════════════════════════════════════════════════
 function SignalDisplay({ signal }) {
-  // ── Guard: bail early if signal shape is incomplete ──
   if (!signal || signal.entry == null || isNaN(Number(signal.entry))) {
     return (
       <div className="mt-6 rounded-lg p-4 border border-gray-800 bg-black text-center">
@@ -734,7 +989,7 @@ function SignalDisplay({ signal }) {
 
   const isBuy  = signal.direction === 'BUY';
   const isSell = signal.direction === 'SELL';
-  const decimals = getDecimals(signal.entry); // safe now – guarded above
+  const decimals = getDecimals(signal.entry);
 
   return (
     <div className={`mt-6 rounded-lg p-6 border-l-4 ${
@@ -742,7 +997,6 @@ function SignalDisplay({ signal }) {
       : isSell ? 'bg-black border-red'
       : 'bg-black border-gray-800'
     }`}>
-      {/* Header row */}
       <div className="flex justify-between items-start mb-4">
         <div className="flex items-center gap-3">
           {isBuy
@@ -765,7 +1019,6 @@ function SignalDisplay({ signal }) {
         </div>
       </div>
 
-      {/* Price grid */}
       <div className="grid grid-cols-2 gap-3 mb-4">
         <PriceBox label="Entry"       value={signal.entry}  decimals={decimals} color="text-white" />
         <PriceBox label="Stop Loss"   value={signal.sl}     decimals={decimals} color="text-red"   />
@@ -779,7 +1032,6 @@ function SignalDisplay({ signal }) {
   );
 }
 
-/** Small reusable price box */
 function PriceBox({ label, value, decimals, color }) {
   const safe = (value != null && !isNaN(Number(value))) ? Number(value).toFixed(decimals) : '—';
   return (

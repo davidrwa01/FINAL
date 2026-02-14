@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { LogOut, Lock, BarChart3 } from 'lucide-react';
@@ -12,6 +12,36 @@ export default function Profile() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('account');
+  const [subscriptionData, setSubscriptionData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Fetch subscription data on component mount
+  useEffect(() => {
+    const fetchSubscriptionData = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch('/api/subscription/status', {
+          credentials: 'include'
+        });
+        const data = await response.json();
+        if (data.success) {
+          setSubscriptionData(data.data);
+        } else {
+          setError(data.message || 'Failed to load subscription data');
+        }
+      } catch (err) {
+        console.error('Failed to fetch subscription data:', err);
+        setError('Failed to load subscription data');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (user) {
+      fetchSubscriptionData();
+    }
+  }, [user]);
 
   const handleLogout = async () => {
     await logout();
@@ -28,7 +58,7 @@ export default function Profile() {
   return (
     <div className="min-h-screen bg-black text-white">
       {/* Header */}
-      <ProfileHeader user={user} />
+      <ProfileHeader user={user} subscriptionData={subscriptionData} />
 
       {/* Main Content */}
       <div className="max-w-4xl mx-auto px-4 py-8">
@@ -70,19 +100,19 @@ export default function Profile() {
         <div className="space-y-6">
           {activeTab === 'account' && (
             <>
-              <AccountInformation user={user} />
+              <AccountInformation user={user} subscriptionData={subscriptionData} />
             </>
           )}
 
           {activeTab === 'subscription' && (
             <>
-              <SubscriptionCard user={user} />
+              <SubscriptionCard user={user} subscriptionData={subscriptionData} loading={loading} />
             </>
           )}
 
           {activeTab === 'history' && (
             <>
-              <ScanHistory user={user} />
+              <ScanHistory user={user} subscriptionData={subscriptionData} />
             </>
           )}
 

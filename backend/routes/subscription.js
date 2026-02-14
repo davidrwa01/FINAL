@@ -148,6 +148,24 @@ router.post('/subscribe',
 
       await subscription.save();
 
+      // Log subscription request
+      await req.logActivity('SUBSCRIPTION_CREATED', {
+        description: `Subscription request submitted for ${plan.tier} plan`,
+        details: {
+          planId: plan._id,
+          planTier: plan.tier,
+          amountUSD: plan.priceUSD,
+          amountRWF,
+          transactionId
+        },
+        subscriptionData: {
+          planId: plan._id,
+          planTier: plan.tier,
+          amount: plan.priceUSD,
+          transactionId
+        }
+      });
+
       res.status(201).json({
         success: true,
         message: 'Subscription request submitted successfully. Pending admin approval.',

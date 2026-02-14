@@ -14,7 +14,8 @@ const app = express();
 // Body parsing
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
+app.use('/api/analysis', require('./routes/analysis'));
+app.use('/api/market', require('./routes/market'));
 // CORS
 app.use(cors({
   origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
@@ -51,6 +52,10 @@ app.use(session({
   }
 }));
 
+// Activity logger middleware - must come after session
+const { activityLogger } = require('./middleware/activityLogger');
+app.use(activityLogger);
+
 // Static files
 const uploadDir = process.env.UPLOAD_DIR || './uploads';
 if (!fs.existsSync(uploadDir)) {
@@ -70,6 +75,7 @@ const signalRoutes = require('./routes/signals');
 const adminRoutes = require('./routes/admin');
 const marketRoutes = require('./routes/market');
 const analysisRoutes = require('./routes/analysis');
+const historyRoutes = require('./routes/history');
 
 // Health check
 app.get('/health', (req, res) => {
@@ -88,6 +94,7 @@ app.use('/api/signals', signalRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/market', marketRoutes);
 app.use('/api/analysis', analysisRoutes);
+app.use('/api/history', historyRoutes);
 
 // ==================== PROTECTED PAGE ROUTES ====================
 

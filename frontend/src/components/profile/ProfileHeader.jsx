@@ -1,32 +1,32 @@
 import React from 'react';
 import { CheckCircle, Clock, AlertCircle } from 'lucide-react';
 
-export default function ProfileHeader({ user }) {
+export default function ProfileHeader({ user, subscriptionData }) {
   const getStatusBadge = () => {
-    if (!user) return null;
+    if (!subscriptionData) return null;
 
-    if (user.subscription?.status === 'ACTIVE') {
-      const endDate = new Date(user.subscription.endDate);
+    const hasActiveSubscription = subscriptionData.hasActiveSubscription;
+    const activeSubscription = subscriptionData.activeSubscription;
+    
+    if (hasActiveSubscription && activeSubscription) {
+      const endDate = new Date(activeSubscription.endDate);
       return {
-        text: `${user.subscription.plan || 'Active'} Active · Expires ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`,
+        text: `${activeSubscription.plan || 'Active'} Active · Expires ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`,
         color: 'bg-green-900/30 border-green-800 text-green-400',
         icon: CheckCircle,
       };
-    } else if (user.subscription?.status === 'PENDING') {
+    } else if (subscriptionData.pendingSubscriptions?.length > 0) {
       return {
         text: 'Pending Payment Approval',
         color: 'bg-yellow-900/30 border-yellow-800 text-yellow-400',
         icon: Clock,
       };
-    } else if (user.subscription?.status === 'EXPIRED') {
-      return {
-        text: 'Subscription Expired',
-        color: 'bg-red-900/30 border-red-800 text-red-400',
-        icon: AlertCircle,
-      };
     } else {
+      // Show trial info
+      const remaining = subscriptionData.trial?.remaining || 2;
+      const dailyLimit = subscriptionData.trial?.dailyLimit || 2;
       return {
-        text: 'Trial Active · 2 signals/day',
+        text: `Trial Active · ${remaining}/${dailyLimit} signals/day`,
         color: 'bg-blue-900/30 border-blue-800 text-blue-400',
         icon: Clock,
       };
@@ -54,6 +54,20 @@ export default function ProfileHeader({ user }) {
         .join('')
         .toUpperCase()
     : 'U';
+
+  // Format last login
+  const getLastLoginText = () => {
+    if (!user?.lastLogin) return 'N/A';
+    const lastLogin = new Date(user.lastLogin);
+    const today = new Date();
+    const isToday = lastLogin.toDateString() === today.toDateString();
+    
+    if (isToday) return 'Today';
+    const daysDiff = Math.floor((today - lastLogin) / (1000 * 60 * 60 * 24));
+    if (daysDiff === 1) return 'Yesterday';
+    if (daysDiff < 7) return `${daysDiff} days ago`;
+    return lastLogin.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
 
   return (
     <div className="bg-gradient-to-b from-gray-900 to-black border-b border-gray-800 px-4 py-8">
@@ -108,7 +122,7 @@ export default function ProfileHeader({ user }) {
           </div>
           <div>
             <p className="text-gray-500 text-xs uppercase tracking-wide">Last Login</p>
-            <p className="text-white font-medium">Today</p>
+            <p className="text-white font-medium">{getLastLoginText()}</p>
           </div>
           <div>
             <p className="text-gray-500 text-xs uppercase tracking-wide">Account Role</p>

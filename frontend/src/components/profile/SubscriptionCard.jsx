@@ -2,25 +2,28 @@ import React, { useState } from 'react';
 import { Calendar, AlertCircle, CheckCircle, RefreshCw, ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
-export default function SubscriptionCard({ user }) {
+export default function SubscriptionCard({ user, subscriptionData, loading }) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('status');
 
-  const hasActiveSubscription = user?.subscription?.status === 'ACTIVE';
-  const isPending = user?.subscription?.status === 'PENDING';
-  const isExpired = user?.subscription?.status === 'EXPIRED';
+  // Extract subscription status from subscriptionData
+  const hasActiveSubscription = subscriptionData?.hasActiveSubscription || false;
+  const activeSubscription = subscriptionData?.activeSubscription;
+  const pendingSubscriptions = subscriptionData?.pendingSubscriptions || [];
+  const trial = subscriptionData?.trial || { daily: 2, remaining: 2, used: 0 };
 
-  const daysRemaining = hasActiveSubscription
-    ? Math.ceil(
-        (new Date(user.subscription.endDate) - new Date()) / (1000 * 60 * 60 * 24)
-      )
+  const isPending = pendingSubscriptions.length > 0;
+  const isExpired = false; // Check if any subscription is expired
+
+  const daysRemaining = hasActiveSubscription && activeSubscription
+    ? activeSubscription.daysRemaining || 0
     : 0;
 
-  const trialSignalsRemaining = Math.max(0, 2 - (user?.trialSignalsUsedToday || 0));
+  const trialSignalsRemaining = trial?.remaining || 2;
 
   // Plan details
   const planDetails = {
-    Basic: { features: ['Unlimited signals', 'Basic analysis', 'Email support'] },
+    Regular: { features: ['Unlimited signals', 'Basic analysis', 'Email support'] },
     Standard: {
       features: ['Unlimited signals', 'Advanced SMC analysis', 'Priority support'],
     },
@@ -29,7 +32,22 @@ export default function SubscriptionCard({ user }) {
     },
   };
 
-  const features = planDetails[user?.subscription?.plan] || planDetails.Basic;
+  const currentPlan = activeSubscription?.plan || 'Trial';
+  const features = planDetails[currentPlan] || planDetails.Regular;
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6 md:p-8">
+          <div className="animate-pulse space-y-4">
+            <div className="h-6 bg-gray-700 rounded w-1/3"></div>
+            <div className="h-20 bg-gray-700 rounded"></div>
+            <div className="h-32 bg-gray-700 rounded"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -44,7 +62,7 @@ export default function SubscriptionCard({ user }) {
             <div>
               <p className="font-semibold text-green-400">Active Subscription</p>
               <p className="text-green-300 text-sm">
-                Your {user.subscription.plan} plan is active and valid.
+                Your {activeSubscription?.plan || 'plan'} plan is active and valid.
               </p>
             </div>
           </div>
@@ -56,7 +74,7 @@ export default function SubscriptionCard({ user }) {
             <div>
               <p className="font-semibold text-yellow-400">Payment Pending Approval</p>
               <p className="text-yellow-300 text-sm">
-                Your payment is being verified by our admin team. You'll receive an email once approved.
+                You have {pendingSubscriptions.length} pending subscription{pendingSubscriptions.length !== 1 ? 's' : ''} awaiting admin verification.
               </p>
             </div>
           </div>
@@ -80,7 +98,7 @@ export default function SubscriptionCard({ user }) {
             <div>
               <p className="font-semibold text-blue-400">Free Trial Active</p>
               <p className="text-blue-300 text-sm">
-                You're on the free trial with limited signals. Upgrade to unlimited access.
+                You're on the free trial with {trial?.remaining || 2} signals remaining today. Upgrade to unlimited access.
               </p>
             </div>
           </div>
@@ -111,7 +129,7 @@ export default function SubscriptionCard({ user }) {
               <div className="bg-gray-800/50 rounded-lg p-4">
                 <p className="text-gray-400 text-xs uppercase tracking-wide">Current Plan</p>
                 <p className="text-white font-bold text-lg mt-1">
-                  {user?.subscription?.plan || 'Trial'}
+                  {activeSubscription?.plan || 'Trial'}
                 </p>
               </div>
 
@@ -145,8 +163,8 @@ export default function SubscriptionCard({ user }) {
               <div className="bg-gray-800/50 rounded-lg p-4">
                 <p className="text-gray-400 text-xs uppercase tracking-wide">Start Date</p>
                 <p className="text-white font-bold text-lg mt-1">
-                  {user?.subscription?.startDate
-                    ? new Date(user.subscription.startDate).toLocaleDateString('en-US', {
+                  {activeSubscription?.startDate
+                    ? new Date(activeSubscription.startDate).toLocaleDateString('en-US', {
                         month: 'short',
                         day: 'numeric',
                       })
@@ -157,8 +175,8 @@ export default function SubscriptionCard({ user }) {
               <div className="bg-gray-800/50 rounded-lg p-4">
                 <p className="text-gray-400 text-xs uppercase tracking-wide">Expires</p>
                 <p className="text-white font-bold text-lg mt-1">
-                  {hasActiveSubscription
-                    ? new Date(user.subscription.endDate).toLocaleDateString('en-US', {
+                  {hasActiveSubscription && activeSubscription
+                    ? new Date(activeSubscription.endDate).toLocaleDateString('en-US', {
                         month: 'short',
                         day: 'numeric',
                       })
@@ -168,14 +186,14 @@ export default function SubscriptionCard({ user }) {
             </div>
 
             {/* Remaining Days */}
-            {hasActiveSubscription && (
+            {hasActiveSubscription && activeSubscription && (
               <div className="bg-yellow-900/20 border border-yellow-800 rounded-lg p-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-yellow-400 font-semibold">{daysRemaining} days remaining</p>
                     <p className="text-yellow-300 text-sm">
                       Renewal on{' '}
-                      {new Date(user.subscription.endDate).toLocaleDateString('en-US', {
+                      {new Date(activeSubscription.endDate).toLocaleDateString('en-US', {
                         month: 'long',
                         day: 'numeric',
                         year: 'numeric',
@@ -216,13 +234,13 @@ export default function SubscriptionCard({ user }) {
                 <div>
                   <div className="flex justify-between text-sm mb-1">
                     <p className="text-blue-300">Signals Generated</p>
-                    <p className="text-blue-400 font-bold">{user?.trialSignalsUsedToday || 0}/2</p>
+                    <p className="text-blue-400 font-bold">{trial?.used || 0}/{trial?.dailyLimit || 2}</p>
                   </div>
                   <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
                     <div
                       className="h-full bg-blue-400 transition-all"
                       style={{
-                        width: `${((user?.trialSignalsUsedToday || 0) / 2) * 100}%`,
+                        width: `${((trial?.used || 0) / (trial?.dailyLimit || 2)) * 100}%`,
                       }}
                     />
                   </div>
@@ -241,7 +259,7 @@ export default function SubscriptionCard({ user }) {
             <div className="bg-gray-800/50 rounded-lg p-4 space-y-2">
               <p className="text-gray-400 text-sm font-medium">Trial Limitations</p>
               <ul className="space-y-1 text-sm text-gray-300">
-                <li>• 2 signals per day maximum</li>
+                <li>• {trial?.dailyLimit || 2} signals per day maximum</li>
                 <li>• Basic analysis only</li>
                 <li>• No API access</li>
                 <li>• Email support only</li>

@@ -58,6 +58,16 @@ router.post('/register',
       req.session.userId = user._id;
       req.session.userRole = user.role;
 
+      // Log registration
+      await req.logActivity('REGISTER', {
+        description: 'User registered successfully',
+        details: {
+          email: user.email,
+          username: user.username,
+          fullName: user.fullName
+        }
+      });
+
       res.status(201).json({
         success: true,
         message: 'Registration successful. Your account is pending admin approval.',
@@ -135,6 +145,15 @@ router.post('/login',
       req.session.userId = user._id;
       req.session.userRole = user.role;
 
+      // Log successful login
+      await req.logActivity('LOGIN', {
+        description: 'User logged in successfully',
+        details: {
+          email: user.email,
+          username: user.username
+        }
+      });
+
       // Determine redirect based on approval status
       let redirectTo = '/trading';
       if (!user.isApproved) {
@@ -169,24 +188,40 @@ router.post('/login',
 );
 
 // Logout
-router.post('/logout', (req, res) => {
-  req.session.destroy((err) => {
-    if (err) {
-      console.error('Logout error:', err);
-      return res.status(500).json({
-        success: false,
-        error: 'SERVER_ERROR',
-        message: 'Error logging out'
+router.post('/logout', async (req, res) => {
+  try {
+    // Log logout before destroying session
+    if (req.session?.userId) {
+      await req.logActivity('LOGOUT', {
+        description: 'User logged out'
       });
     }
 
-    res.clearCookie('connect.sid');
-    res.json({
-      success: true,
-      message: 'Logged out successfully',
-      redirectTo: '/login'
+    req.session.destroy((err) => {
+      if (err) {
+        console.error('Logout error:', err);
+        return res.status(500).json({
+          success: false,
+          error: 'SERVER_ERROR',
+          message: 'Error logging out'
+        });
+      }
+
+      res.clearCookie('connect.sid');
+      res.json({
+        success: true,
+        message: 'Logged out successfully',
+        redirectTo: '/login'
+      });
     });
-  });
+  } catch (error) {
+    console.error('Logout error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'SERVER_ERROR',
+      message: 'Error logging out'
+    });
+  }
 });
 
 // Check authentication status
@@ -271,6 +306,12 @@ router.patch('/profile', requireAuth,
         { new: true }
       ).select('-passwordHash');
 
+      // Log profile update
+      await req.logActivity('PROFILE_UPDATE', {
+        description: 'User profile updated',
+        details: updateData
+      });
+
       res.json({
         success: true,
         message: 'Profile updated successfully',
@@ -353,6 +394,11 @@ router.post('/change-password', requireAuth,
       // Hash new password
       user.passwordHash = await bcrypt.hash(newPassword, 10);
       await user.save();
+
+      // Log password change
+      await req.logActivity('PASSWORD_CHANGE', {
+        description: 'User changed their password'
+      });
 
       res.json({
         success: true,
@@ -559,6 +605,11 @@ router.post('/reset-password',
       user.resetOtp = null;
       user.resetOtpExpiry = null;
       await user.save();
+
+      // Log password reset
+      await req.logActivity('PASSWORD_RESET', {
+        description: 'User reset their password'
+      });
 
       res.json({
         success: true,
