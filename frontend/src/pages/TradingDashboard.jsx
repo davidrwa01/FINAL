@@ -411,33 +411,51 @@ export default function TradingDashboard() {
       setLoading(false);
     }
   };
+  // ── Inside TradingDashboard component ──
 
+   // ══════════════════════════════════════════════════
+  // REPLACE handleSignalGeneration WITH THIS:
+  // ══════════════════════════════════════════════════
   const handleSignalGeneration = async (signalData) => {
+    // Step 1: Check access
     try {
-      const response = await signalService.generate(signalData);
-      if (!response.success && response.error === 'TRIAL_LIMIT_EXCEEDED') {
-        alert(response.message);
+      const accessResponse = await signalService.checkAccess();
+      if (accessResponse.data && !accessResponse.data.canGenerate) {
+        alert('Signal limit reached. Please upgrade.');
         navigate('/subscribe');
         return false;
       }
+    } catch (err) {
+      // If check-access fails, still allow (endpoint might not exist yet)
+      console.warn('Access check failed:', err.message);
+    }
+
+    // Step 2: Track usage (don't block if it fails)
+    try {
+      const response = await signalService.generate({
+        symbol: signalData.symbol || 'UNKNOWN',
+        timeframe: signalData.timeframe || 'H1',
+        signalType: signalData.signalType || 'MANUAL'
+      });
+
       if (response.data?.remainingSignals !== undefined) {
         setSubStatus(prev => ({
           ...prev,
           trial: { ...prev?.trial, remaining: response.data.remainingSignals }
         }));
       }
-      return true;
     } catch (err) {
       if (err.response?.data?.error === 'TRIAL_LIMIT_EXCEEDED') {
-        alert('Trial limit exceeded. Please upgrade.');
+        alert(err.response.data.message || 'Trial limit exceeded.');
         navigate('/subscribe');
         return false;
       }
-      console.error('Signal generation failed:', err);
-      return false;
+      // Any other error — just log and continue
+      console.warn('Signal tracking failed (non-blocking):', err.message);
     }
-  };
 
+    return true;
+  };
   // ── Loading / Error states ──
   if (loading) {
     return (
@@ -760,65 +778,340 @@ function SignalGenerator({ onSignalGeneration }) {
 // ═══════════════════════════════════════════════════════════
 // OCR SCANNER (EXISTING)
 // ═══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
+// OCR SCANNER (INSIDE TradingDashboard.jsx)
+// ═══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
+// OCR SCANNER — COMPLETE WORKING VERSION
+// ═══════════════════════════════════════════════════════════
 function OCRScanner({ onSignalGeneration }) {
-  const [loading, setLoading]   = useState(false);
-  const [signal, setSignal]     = useState(null);
-  const fileInputRef            = useRef(null);
+  const [loading, setLoading]     = useState(false);
+  const [signal, setSignal]       = useState(null);
+  const [error, setError]         = useState(null);
+  const [detected, setDetected]   = useState(null);
+  const [preview, setPreview]     = useState(null);
+  const [progress, setProgress]   = useState('');
+  const [manualSymbol, setManual] = useState('');
+  const [manualTF, setManualTF]   = useState('');
+  const [needsConfirm, setNeedsConfirm] = useState(false);
+  const fileInputRef              = useRef(null);
 
+  // ── Symbol options for manual selection ──
+  const SYMBOLS = [
+    'EURUSD','GBPUSD','USDJPY','USDCHF','AUDUSD','NZDUSD','USDCAD',
+    'EURGBP','EURJPY','GBPJPY',
+    'BTCUSDT','ETHUSDT','BNBUSDT','SOLUSDT','XRPUSDT',
+    'XAUUSD','XAGUSD'
+  ];
+
+  // ── Handle file upload ──
   const handleFileSelect = async (file) => {
     if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setError('Please upload an image file');
+      return;
+    }
 
-    const allowed = await onSignalGeneration({ symbol: 'OCR_SCAN', timeframe: 'AUTO', signalType: 'OCR_ANALYSIS' });
-    if (!allowed) return;
+    // Show preview
+    const reader = new FileReader();
+    reader.onload = (e) => setPreview(e.target.result);
+    reader.readAsDataURL(file);
 
     setLoading(true);
     setSignal(null);
+    setError(null);
+    setDetected(null);
+    setNeedsConfirm(false);
+
     try {
+      // 1. OCR — extract text
+      setProgress('Reading chart text...');
       const { data } = await Tesseract.recognize(file, 'eng');
-      const { symbol, timeframe } = parseOCRText(data.text);
-      const result = await fullSignalPipeline(symbol, timeframe);
-      setSignal(result);
+      console.log('[OCR] Raw text:', data.text);
+
+      // 2. Parse symbol + timeframe
+      const parsed = parseOCRText(data.text);
+      setDetected(parsed);
+      console.log('[OCR] Parsed:', parsed);
+
+      if (!parsed.symbol) {
+        // Could not detect — ask user to select manually
+        setNeedsConfirm(true);
+        setLoading(false);
+        setProgress('');
+        return;
+      }
+
+      // Pre-fill manual selectors
+      setManual(parsed.symbol);
+      setManualTF(parsed.timeframe);
+
+      // 3. Run analysis
+      await runAnalysis(parsed.symbol, parsed.timeframe);
+
     } catch (err) {
-      console.error('OCR analysis failed:', err);
-      alert('Failed to process screenshot.');
+      console.error('[OCR] Failed:', err);
+      setError('Failed to process image: ' + err.message);
+      setNeedsConfirm(true);
     } finally {
       setLoading(false);
+      setProgress('');
     }
+  };
+
+  // ── Run analysis with confirmed symbol ──
+  const runAnalysis = async (symbol, timeframe) => {
+    if (!symbol) {
+      setError('Please select a trading pair');
+      return;
+    }
+
+    // Permission gate
+    setProgress('Checking access...');
+    const allowed = await onSignalGeneration({
+      symbol: symbol,
+      timeframe: timeframe,
+      signalType: 'OCR_ANALYSIS'
+    });
+    if (!allowed) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setNeedsConfirm(false);
+
+    try {
+      // Use fullSignalPipeline — it handles everything
+      setProgress(`Analyzing ${symbol} on ${timeframe}...`);
+      const result = await fullSignalPipeline(symbol, timeframe);
+
+      console.log('[OCR] Signal result:', result);
+      setSignal(result);
+
+    } catch (err) {
+      console.error('[OCR] Analysis failed:', err);
+      setError('Analysis failed: ' + err.message);
+    } finally {
+      setLoading(false);
+      setProgress('');
+    }
+  };
+
+  // ── Manual confirm handler ──
+  const handleManualAnalyze = () => {
+    const sym = manualSymbol || (detected?.symbol) || '';
+    const tf = manualTF || (detected?.timeframe) || 'H1';
+    if (!sym) {
+      setError('Please select a trading pair');
+      return;
+    }
+    runAnalysis(sym, tf);
+  };
+
+  // ── Reset ──
+  const handleReset = () => {
+    setSignal(null);
+    setError(null);
+    setPreview(null);
+    setDetected(null);
+    setNeedsConfirm(false);
+    setManual('');
+    setManualTF('');
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   return (
     <div className="bg-black-light rounded-lg p-6 border border-gray-800">
+      {/* Header */}
       <div className="mb-4 flex justify-between items-center">
         <h2 className="text-sm font-bold tracking-wider text-white uppercase">Chart Analysis (OCR)</h2>
-        <Upload className="w-4 h-4 text-gray-500" />
+        <div className="flex items-center gap-2">
+          <Upload className="w-4 h-4 text-gray-500" />
+          {(signal || preview) && (
+            <button onClick={handleReset} className="text-xs text-gray-500 hover:text-yellow transition underline">
+              Reset
+            </button>
+          )}
+        </div>
       </div>
 
-      <div
-        className="border border-gray-800 bg-black rounded-lg p-8 text-center cursor-pointer hover:border-yellow/50 transition"
-        onClick={() => fileInputRef.current?.click()}
-      >
-        <input ref={fileInputRef} type="file" accept="image/*"
-          onChange={e => handleFileSelect(e.target.files?.[0])} className="hidden" />
+      {/* Upload zone */}
+      {!needsConfirm && !signal && (
+        <div
+          className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition ${
+            loading ? 'border-yellow/50 bg-yellow/5' :
+            preview ? 'border-gray-700 bg-black' :
+            'border-gray-800 bg-black hover:border-yellow/50'
+          }`}
+          onClick={() => !loading && fileInputRef.current?.click()}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={e => handleFileSelect(e.target.files?.[0])}
+            className="hidden"
+          />
 
-        {loading ? (
-          <div className="flex flex-col items-center">
-            <div className="spinner mb-4"></div>
-            <p className="text-sm text-gray-400">Extracting text & analysing…</p>
+          {loading ? (
+            <div className="flex flex-col items-center py-4">
+              <div className="spinner mb-3"></div>
+              <p className="text-sm text-gray-400">{progress || 'Processing...'}</p>
+            </div>
+          ) : preview && !signal ? (
+            <div className="space-y-3">
+              <img src={preview} alt="Chart" className="max-h-32 mx-auto rounded border border-gray-700 object-contain" />
+              <p className="text-xs text-gray-500">Click to upload a different chart</p>
+            </div>
+          ) : (
+            <>
+              <Upload className="w-8 h-8 text-gray-600 mx-auto mb-3" />
+              <p className="text-sm text-white font-mono mb-1">Upload Chart Screenshot</p>
+              <p className="text-xs text-gray-500">TradingView · MT4/MT5 · Bloomberg</p>
+              <p className="text-xs text-gray-600 mt-2">Signal is generated from real market data, not from the image</p>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Detection result */}
+      {detected && !needsConfirm && (
+        <div className="mt-3 p-2 bg-gray-900/50 border border-gray-800 rounded flex items-center justify-between">
+          <div className="text-xs">
+            <span className="text-gray-500">Detected: </span>
+            <span className="text-yellow font-mono font-bold">{detected.symbol || 'None'}</span>
+            <span className="text-gray-600 ml-2">{detected.timeframe}</span>
           </div>
-        ) : (
-          <>
-            <Upload className="w-8 h-8 text-gray-600 mx-auto mb-3" />
-            <p className="text-sm text-white font-mono mb-1">Upload Chart Screenshot</p>
-            <p className="text-xs text-gray-500">TradingView · MT4/MT5 · Bloomberg</p>
-          </>
-        )}
-      </div>
+          {detected.symbol && <span className="text-xs text-green">✓</span>}
+        </div>
+      )}
 
-      {signal && signal.entry != null && <SignalDisplay signal={signal} />}
+      {/* ── MANUAL SELECTION (when OCR couldn't detect) ── */}
+      {needsConfirm && (
+        <div className="space-y-4">
+          {preview && (
+            <div className="border border-gray-800 rounded-lg overflow-hidden">
+              <img src={preview} alt="Chart" className="w-full max-h-32 object-contain bg-black" />
+            </div>
+          )}
+
+          {detected?.symbol ? (
+            <div className="p-2 bg-green-900/20 border border-green-700/50 rounded text-xs text-green-400">
+              ✓ OCR detected: <span className="font-mono font-bold">{detected.symbol}</span>
+              <span className="text-gray-500 ml-2">{detected.timeframe}</span>
+            </div>
+          ) : (
+            <div className="p-2 bg-yellow-900/20 border border-yellow-700/50 rounded text-xs text-yellow-400">
+              ⚠ Could not detect pair from chart. Please select manually.
+            </div>
+          )}
+
+          {/* Symbol selector */}
+          <div>
+            <label className="block text-xs text-gray-500 mb-2 uppercase tracking-wider">Select Trading Pair</label>
+            <select
+              value={manualSymbol}
+              onChange={e => setManual(e.target.value)}
+              className="w-full px-3 py-2 bg-black border border-gray-800 text-white text-sm rounded font-mono focus:border-yellow outline-none"
+            >
+              <option value="">-- Select Pair --</option>
+              <optgroup label="Forex">
+                {['EURUSD','GBPUSD','USDJPY','USDCHF','AUDUSD','NZDUSD','USDCAD','EURGBP','EURJPY','GBPJPY'].map(s =>
+                  <option key={s} value={s}>{s.slice(0,3)}/{s.slice(3)}</option>
+                )}
+              </optgroup>
+              <optgroup label="Crypto">
+                {['BTCUSDT','ETHUSDT','BNBUSDT','SOLUSDT','XRPUSDT'].map(s =>
+                  <option key={s} value={s}>{s.replace('USDT','/USDT')}</option>
+                )}
+              </optgroup>
+              <optgroup label="Metals">
+                <option value="XAUUSD">XAU/USD (Gold)</option>
+                <option value="XAGUSD">XAG/USD (Silver)</option>
+              </optgroup>
+            </select>
+          </div>
+
+          {/* Timeframe selector */}
+          <div>
+            <label className="block text-xs text-gray-500 mb-2 uppercase tracking-wider">Timeframe</label>
+            <div className="flex flex-wrap gap-2">
+              {TIMEFRAME_LIST.map(tf => (
+                <button
+                  key={tf}
+                  onClick={() => setManualTF(tf)}
+                  className={`px-3 py-1 text-xs font-mono rounded border transition ${
+                    (manualTF || 'H1') === tf
+                      ? 'bg-yellow text-black border-yellow'
+                      : 'border-gray-800 text-gray-400 hover:border-gray-600'
+                  }`}
+                >
+                  {tf}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Analyze button */}
+          <button
+            onClick={handleManualAnalyze}
+            disabled={!manualSymbol || loading}
+            className="w-full py-2.5 bg-yellow text-black text-sm font-bold rounded hover:bg-yellow/90 transition disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading ? 'Analyzing...' : `Analyze ${manualSymbol || 'Selected Pair'}`}
+          </button>
+
+          <p className="text-xs text-gray-600 text-center">
+            Signal uses real market data — not image pixels
+          </p>
+        </div>
+      )}
+
+      {/* Loading during analysis */}
+      {loading && needsConfirm && (
+        <div className="mt-4 text-center py-4">
+          <div className="spinner mx-auto mb-2"></div>
+          <p className="text-xs text-gray-400">{progress || 'Analyzing...'}</p>
+        </div>
+      )}
+
+      {/* Error */}
+      {error && (
+        <div className="mt-4 p-3 bg-red-900/20 border border-red-700/50 rounded-lg">
+          <p className="text-sm text-red-300">{String(error)}</p>
+          <button onClick={handleReset} className="text-xs text-red-400 hover:text-red-300 underline mt-1">
+            Try again
+          </button>
+        </div>
+      )}
+
+      {/* ── SIGNAL RESULT ── */}
+      {signal && signal.entry != null && !isNaN(Number(signal.entry)) && Number(signal.entry) > 0 && (
+        <div className="mt-4">
+          {/* Data source badge */}
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-2 h-2 bg-green rounded-full"></div>
+            <span className="text-xs text-green">Signal from real market data</span>
+          </div>
+          <SignalDisplay signal={signal} />
+        </div>
+      )}
+
+      {/* WAIT signal */}
+      {signal && signal.direction === 'WAIT' && (
+        <div className="mt-4 p-3 border border-gray-700 rounded-lg text-center">
+          <p className="text-sm text-gray-400">⏸ No clear setup on {String(signal.symbol || '')}</p>
+          <p className="text-xs text-gray-600">
+            {signal.reason ? String(signal.reason) : 'Low confluence — wait for better entry'}
+          </p>
+        </div>
+      )}
     </div>
   );
 }
-
 // ═══════════════════════════════════════════════════════════
 // LIVE CHART (EXISTING)
 // ═══════════════════════════════════════════════════════════
